@@ -1,0 +1,45 @@
+# Core AI and LangChain dependencies
+langchain
+langchain-community
+langchain-groq
+langchain-huggingface
+groq
+
+# Vector Database (FAISS)
+faiss-cpu
+
+# Document processing and retrieval
+langchain-cohere
+cohere
+
+# Text processing and embeddings
+sentence-transformers
+transformers
+
+# Web Framework
+flask
+flask-cors
+
+# Environment and configuration
+python-dotenv
+pydantic
+
+# Data processing
+numpy
+pandas
+
+# HTTP and utilities
+requests
+httpx
+
+# Development and testing
+pytest
+jupyter
+ipykernel
+
+# Text splitting and document loading
+tiktoken
+
+# Additional dependencies for stability
+setuptools
+wheel

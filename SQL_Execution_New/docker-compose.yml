@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sales
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: admin
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - sql_network
+    ports:
+      - "3307:3306"
+
+  trino:
+    image: trinodb/trino:426
+    container_name: trino_coordinator
+    depends_on:
+      - mysql
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+    networks:
+      - sql_network
+    ports:
+      - "8080:8080"
+
+  spark-master:
+    build: ./spark
+    container_name: spark_master
+    environment:
+      - SPARK_MASTER_HOST=0.0.0.0
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    command: "/opt/spark/bin/spark-class org.apache.spark.deploy.master.Master"
+    volumes:
+      - ./spark:/opt/spark/conf
+    networks:
+      - sql_network
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+
+  spark-worker:
+    build: ./spark
+    container_name: spark_worker
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+    command: "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
+    depends_on:
+      - spark-master
+    networks:
+      - sql_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    networks:
+      - sql_network
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:15
+    container_name: postgres_db
+    environment:
+      POSTGRES_DB: analytics
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sql_network
+    ports:
+      - "5432:5432"
+
+volumes:
+  mysql_data:
+  postgres_data:
+
+networks:
+  sql_network:
+    driver: bridge

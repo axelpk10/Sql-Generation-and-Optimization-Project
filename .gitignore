@@ -1,0 +1,111 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+*.env
+
+# API Keys (double protection)
+*api_key*
+*API_KEY*
+
+# Docker
+.dockerignore
+
+# Database files
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js (for future frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# FAISS indexes (large binary files)
+*/faiss_index/
+*/schema_faiss_index/
+*faiss_index*
+
+# Large data files
+*.pdf
+data/
+*/data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker volumes
+mysql_data/
+postgres_data/
+
+# Test results
+test_results/
+*test_results*
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Exclude all markdown files except SETUP_GUIDE.md
+*.md
+!SETUP_GUIDE.md

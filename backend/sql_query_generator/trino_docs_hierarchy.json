@@ -1,0 +1,348 @@
+{
+  "title": "Trino Documentation",
+  "url": "https://trino.io/docs/current/",
+  "children": [
+    {
+      "title": "Overview",
+      "url": "https://trino.io/docs/current/overview.html",
+      "children": [
+        {
+          "title": "Use cases",
+          "url": "https://trino.io/docs/current/overview/use-cases.html",
+          "children": []
+        },
+        {
+          "title": "Trino concepts",
+          "url": "https://trino.io/docs/current/overview/concepts.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Functions and Operators",
+      "url": "https://trino.io/docs/current/functions.html",
+      "children": [
+        {
+          "title": "Aggregate",
+          "url": "https://trino.io/docs/current/functions/aggregate.html",
+          "children": []
+        },
+        {
+          "title": "AI",
+          "url": "https://trino.io/docs/current/functions/ai.html",
+          "children": []
+        },
+        {
+          "title": "Array",
+          "url": "https://trino.io/docs/current/functions/array.html",
+          "children": []
+        },
+        {
+          "title": "Binary",
+          "url": "https://trino.io/docs/current/functions/binary.html",
+          "children": []
+        },
+        {
+          "title": "Bitwise",
+          "url": "https://trino.io/docs/current/functions/bitwise.html",
+          "children": []
+        },
+        {
+          "title": "Color",
+          "url": "https://trino.io/docs/current/functions/color.html",
+          "children": []
+        },
+        {
+          "title": "Comparison",
+          "url": "https://trino.io/docs/current/functions/comparison.html",
+          "children": []
+        },
+        {
+          "title": "Conditional",
+          "url": "https://trino.io/docs/current/functions/conditional.html",
+          "children": []
+        },
+        {
+          "title": "Conversion",
+          "url": "https://trino.io/docs/current/functions/conversion.html",
+          "children": []
+        },
+        {
+          "title": "Date and time",
+          "url": "https://trino.io/docs/current/functions/dateandtime.html",
+          "children": []
+        },
+        {
+          "title": "Decimal",
+          "url": "https://trino.io/docs/current/functions/decimal.html",
+          "children": []
+        },
+        {
+          "title": "Geospatial",
+          "url": "https://trino.io/docs/current/functions/geospatial.html",
+          "children": []
+        },
+        {
+          "title": "HyperLogLog",
+          "url": "https://trino.io/docs/current/functions/hyperloglog.html",
+          "children": []
+        },
+        {
+          "title": "IP Address",
+          "url": "https://trino.io/docs/current/functions/ipaddress.html",
+          "children": []
+        },
+        {
+          "title": "JSON",
+          "url": "https://trino.io/docs/current/functions/json.html",
+          "children": []
+        },
+        {
+          "title": "Lambda",
+          "url": "https://trino.io/docs/current/functions/lambda.html",
+          "children": []
+        },
+        {
+          "title": "Logical",
+          "url": "https://trino.io/docs/current/functions/logical.html",
+          "children": []
+        },
+        {
+          "title": "Machine learning",
+          "url": "https://trino.io/docs/current/functions/machinelearning.html",
+          "children": []
+        },
+        {
+          "title": "Map",
+          "url": "https://trino.io/docs/current/functions/map.html",
+          "children": []
+        },
+        {
+          "title": "Math",
+          "url": "https://trino.io/docs/current/functions/math.html",
+          "children": []
+        },
+        {
+          "title": "Quantile digest",
+          "url": "https://trino.io/docs/current/functions/quantiledigest.html",
+          "children": []
+        },
+        {
+          "title": "Regular expression",
+          "url": "https://trino.io/docs/current/functions/regularexpression.html",
+          "children": []
+        },
+        {
+          "title": "Session",
+          "url": "https://trino.io/docs/current/functions/session.html",
+          "children": []
+        },
+        {
+          "title": "Set Digest",
+          "url": "https://trino.io/docs/current/functions/setdigest.html",
+          "children": []
+        },
+        {
+          "title": "String",
+          "url": "https://trino.io/docs/current/functions/string.html",
+          "children": []
+        },
+        {
+          "title": "System",
+          "url": "https://trino.io/docs/current/functions/system.html",
+          "children": []
+        },
+        {
+          "title": "Table",
+          "url": "https://trino.io/docs/current/functions/table.html",
+          "children": []
+        },
+        {
+          "title": "Teradata",
+          "url": "https://trino.io/docs/current/functions/teradata.html",
+          "children": []
+        },
+        {
+          "title": "T-Digest",
+          "url": "https://trino.io/docs/current/functions/t-digest.html",
+          "children": []
+        },
+        {
+          "title": "URL",
+          "url": "https://trino.io/docs/current/functions/url.html",
+          "children": []
+        },
+        {
+          "title": "UUID",
+          "url": "https://trino.io/docs/current/functions/uuid.html",
+          "children": []
+        },
+        {
+          "title": "Window",
+          "url": "https://trino.io/docs/current/functions/window.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Query Optimizer",
+      "url": "https://trino.io/docs/current/optimizer.html",
+      "children": [
+        {
+          "title": "Table statistics",
+          "url": "https://trino.io/docs/current/optimizer/table-statistics.html",
+          "children": []
+        },
+        {
+          "title": "Cost in EXPLAIN",
+          "url": "https://trino.io/docs/current/optimizer/cost-in-explain.html",
+          "children": []
+        },
+        {
+          "title": "Cost-based optimizations",
+          "url": "https://trino.io/docs/current/optimizer/cost-based-optimizations.html",
+          "children": []
+        },
+        {
+          "title": "Pushdown",
+          "url": "https://trino.io/docs/current/optimizer/pushdown.html",
+          "children": []
+        },
+        {
+          "title": "Adaptive plan optimizations",
+          "url": "https://trino.io/docs/current/optimizer/adaptive-plan-optimizations.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "User Defined Functions",
+      "url": "https://trino.io/docs/current/udf.html",
+      "children": [
+        {
+          "title": "Introduction to UDFs",
+          "url": "https://trino.io/docs/current/udf/introduction-to-functions.html",
+          "children": []
+        },
+        {
+          "title": "FUNCTION",
+          "url": "https://trino.io/docs/current/udf/function.html",
+          "children": []
+        },
+        {
+          "title": "SQL user-defined functions",
+          "url": "https://trino.io/docs/current/udf/sql-user-defined-functions.html",
+          "children": []
+        },
+        {
+          "title": "Python user-defined functions",
+          "url": "https://trino.io/docs/current/udf/python-user-defined-functions.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "SQL Language",
+      "url": "https://trino.io/docs/current/language.html",
+      "children": [
+        {
+          "title": "SQL statement support",
+          "url": "https://trino.io/docs/current/language/sql-statement-support.html",
+          "children": []
+        },
+        {
+          "title": "Data types",
+          "url": "https://trino.io/docs/current/language/data-types.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "SQL Statement Syntax",
+      "url": "https://trino.io/docs/current/sql.html",
+      "children": [
+        {
+          "title": "ALTER MATERIALIZED VIEW",
+          "url": "https://trino.io/docs/current/sql/alter-materialized-view.html",
+          "children": []
+        },
+        {
+          "title": "ALTER SCHEMA",
+          "url": "https://trino.io/docs/current/sql/alter-schema.html",
+          "children": []
+        },
+        {
+          "title": "ALTER TABLE",
+          "url": "https://trino.io/docs/current/sql/alter-table.html",
+          "children": []
+        },
+        {
+          "title": "ALTER VIEW",
+          "url": "https://trino.io/docs/current/sql/alter-view.html",
+          "children": []
+        },
+        {
+          "title": "ANALYZE",
+          "url": "https://trino.io/docs/current/sql/analyze.html",
+          "children": []
+        },
+        {
+          "title": "CALL",
+          "url": "https://trino.io/docs/current/sql/call.html",
+          "children": []
+        },
+        {
+          "title": "COMMENT",
+          "url": "https://trino.io/docs/current/sql/comment.html",
+          "children": []
+        },
+        {
+          "title": "COMMIT",
+          "url": "https://trino.io/docs/current/sql/commit.html",
+          "children": []
+        },
+        {
+          "title": "CREATE CATALOG",
+          "url": "https://trino.io/docs/current/sql/create-catalog.html",
+          "children": []
+        },
+        {
+          "title": "CREATE FUNCTION",
+          "url": "https://trino.io/docs/current/sql/create-function.html",
+          "children": []
+        },
+        {
+          "title": "USE",
+          "url": "https://trino.io/docs/current/sql/use.html",
+          "children": []
+        },
+        {
+          "title": "VALUES",
+          "url": "https://trino.io/docs/current/sql/values.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Connectors",
+      "url": "https://trino.io/docs/current/connector.html",
+      "children": [
+        {
+          "title": "MySQL",
+          "url": "https://trino.io/docs/current/connector/mysql.html",
+          "children": []
+        },
+        {
+          "title": "MongoDB",
+          "url": "https://trino.io/docs/current/connector/mongodb.html",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Usage of Trino with SQL",
+      "url": "https://github.com/bitsondatadev/trino-getting-started/blob/main/community-tutorials/mysql/trino-mysql/README.md",
+      "children": []
+    }
+  ]
+}
