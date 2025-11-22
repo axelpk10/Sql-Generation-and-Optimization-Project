@@ -115,11 +115,23 @@ class SchemaGenerator:
             logger.error(f"Error in reranking: {str(e)}")
             return documents[:top_n]
     
-    def generate_schema(self, requirements: str) -> Dict[str, Any]:
-        """Generate database schema based on requirements"""
+    def generate_schema(self, requirements: str, dialect: str = "postgresql") -> Dict[str, Any]:
+        """Generate database schema based on requirements for specific dialect"""
         start_time = time.time()
         
         try:
+            # Validate dialect
+            supported_dialects = ['mysql', 'postgresql', 'trino', 'spark']
+            if dialect.lower() not in supported_dialects:
+                return {
+                    "success": False,
+                    "error": f"Unsupported dialect: {dialect}. Supported: {supported_dialects}",
+                    "schema": None,
+                    "explanation": None
+                }
+            
+            dialect = dialect.lower()
+            
             # Retrieve relevant documents
             docs = self.retrieve_relevant_docs(requirements, k=5)
             
@@ -137,30 +149,19 @@ class SchemaGenerator:
             # Prepare context
             context = "\n\n".join([doc.page_content for doc in reranked_docs])
             
-            # Create prompt for schema generation
-            prompt = self.create_schema_prompt(requirements, context)
+            # Create dialect-specific prompt
+            prompt = self.create_schema_prompt(requirements, context, dialect)
             
-            # Generate schema using Groq
+            # Get dialect-specific system prompt
+            system_prompt = self.get_schema_prompt_template(dialect)
+            
+            # Generate schema using Groq with dialect-specific prompts
             response = self.groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert database architect specializing in schema design and optimization.
-                        
-Your responses should be:
-1. Technically accurate and follow database best practices
-2. Include proper data types, constraints, and indexing strategies
-3. Consider performance, scalability, and maintainability
-4. Provide clear explanations for design decisions
-
-Format your response as:
-[SCHEMA]
-<DDL statements>
-[EXPLANATION]
-<Design rationale and best practices>
-[OPTIMIZATIONS]
-<Performance recommendations>"""
+                        "content": system_prompt
                     },
                     {
                         "role": "user", 
@@ -171,14 +172,14 @@ Format your response as:
                 max_tokens=2000
             )
             
-            # Parse response
+            # Parse response with structured format
             content = response.choices[0].message.content
-            schema, explanation, optimizations = self.parse_schema_response(content)
+            schema, explanation, optimizations, best_practices = self.parse_schema_response(content)
             
             end_time = time.time()
             response_time = end_time - start_time
             
-            # Log analytics
+            # Log analytics with dialect information
             try:
                 schema_id = schema_analytics.log_schema_generation(
                     requirements=requirements,
@@ -190,7 +191,8 @@ Format your response as:
                     docs_used=len(reranked_docs),
                     success=True,
                     reranking_model="rerank-english-v3.0",
-                    llm_model="llama-3.3-70b-versatile"
+                    llm_model="llama-3.3-70b-versatile",
+                    dialect=dialect  # Add dialect to analytics
                 )
                 logger.info(f"Analytics logged for schema ID: {schema_id}")
             except Exception as analytics_error:
@@ -201,9 +203,13 @@ Format your response as:
                 "schema": schema,
                 "explanation": explanation,
                 "optimizations": optimizations,
+                "best_practices": best_practices,
+                "dialect": dialect,
+                "dialect_features": self.get_dialect_features(dialect),
                 "response_time": response_time,
                 "docs_retrieved": len(docs),
-                "docs_used": len(reranked_docs)
+                "docs_used": len(reranked_docs),
+                "generated_content": content  # Full LLM response for debugging
             }
             
         except Exception as e:
@@ -232,29 +238,128 @@ Format your response as:
                 "explanation": None
             }
     
-    def create_schema_prompt(self, requirements: str, context: str) -> str:
-        """Create prompt for schema generation"""
+    def get_schema_prompt_template(self, dialect: str) -> str:
+        """Get dialect-specific system prompt for schema generation"""
+        base_prompt = """You are an expert database architect specializing in schema design and optimization.
+        
+Your responses should be:
+1. Technically accurate and follow database best practices
+2. Include proper data types, constraints, and indexing strategies
+3. Consider performance, scalability, and maintainability
+4. Provide clear explanations for design decisions
+
+Format your response as:
+[SCHEMA]
+<DDL statements>
+[EXPLANATION]
+<Design rationale and best practices>
+[OPTIMIZATIONS]
+<Performance recommendations>
+[BEST_PRACTICES]
+<Categorized best practices with title, description, category>
+"""
+        
+        dialect_specifics = {
+            'mysql': """
+MYSQL SPECIFIC REQUIREMENTS:
+- Use AUTO_INCREMENT for primary keys, never SERIAL
+- Specify ENGINE=InnoDB for ACID compliance
+- Use appropriate MySQL data types (INT, VARCHAR, TEXT, DATETIME)
+- Add DEFAULT CHARSET=utf8mb4 for full Unicode support
+- Use UNIQUE KEY and INDEX syntax specific to MySQL
+- Consider partitioning for large tables
+- Include proper foreign key constraints with ON DELETE/UPDATE actions
+- Use TIMESTAMP DEFAULT CURRENT_TIMESTAMP for audit fields""",
+            
+            'postgresql': """
+POSTGRESQL SPECIFIC REQUIREMENTS:
+- Use SERIAL or IDENTITY columns for auto-incrementing primary keys
+- Leverage JSONB for flexible JSON storage with indexing
+- Use appropriate PostgreSQL data types (BIGSERIAL, TIMESTAMPTZ, ARRAY)
+- Include proper constraints (CHECK, UNIQUE, FOREIGN KEY)
+- Consider table partitioning for large datasets
+- Use CREATE INDEX CONCURRENTLY for production environments
+- Implement proper schema organization with namespaces
+- Use GENERATED ALWAYS AS for computed columns where applicable""",
+            
+            'trino': """
+TRINO SPECIFIC REQUIREMENTS:
+- NO auto-increment columns (Trino doesn't support them)
+- Use BIGINT for ID columns with manual sequence generation
+- Design for distributed queries across multiple data sources
+- Include proper partitioning strategies (especially for Hive connector)
+- Use appropriate data types for the target connector
+- Consider bucketing for join optimization
+- Design schemas for cross-catalog queries
+- Include table properties for connector-specific optimizations
+- Focus on columnar storage optimization""",
+            
+            'spark': """
+SPARK SQL SPECIFIC REQUIREMENTS:
+- Design for Delta tables with ACID transactions
+- NO auto-increment (use monotonically_increasing_id() or UUID)
+- Include partitioning columns for distributed performance
+- Use appropriate Spark SQL data types (BIGINT, STRING, TIMESTAMP)
+- Consider schema evolution and backward compatibility
+- Design for both batch and streaming workloads
+- Include table properties for Delta optimizations
+- Use proper data layout for query performance
+- Consider Z-ordering for frequently queried columns"""
+        }
+        
+        return base_prompt + dialect_specifics.get(dialect, "")
+    
+    def create_schema_prompt(self, requirements: str, context: str, dialect: str) -> str:
+        """Create dialect-specific prompt for schema generation"""
+        dialect_features = self.get_dialect_features(dialect)
+        
         return f"""Based on the following database design documentation:
 
 {context}
 
+Target Database: {dialect.upper()}
+Dialect Features: {', '.join(dialect_features)}
+
 Requirements: {requirements}
 
-Please design an optimal database schema including:
-1. CREATE TABLE statements with appropriate data types
-2. Primary keys, foreign keys, and constraints
-3. Indexing strategies for performance
-4. Partitioning recommendations if applicable
-5. Best practices for the given requirements
+Please design an optimal {dialect.upper()} database schema including:
+1. CREATE TABLE statements with {dialect}-appropriate data types
+2. Primary keys, foreign keys, and constraints specific to {dialect}
+3. Indexing strategies optimized for {dialect}
+4. Partitioning recommendations if applicable for {dialect}
+5. Best practices specific to {dialect} database
 
-Focus on performance, scalability, and maintainability."""
+Focus on {dialect}-specific performance, scalability, and maintainability features."""
+    
+    def get_dialect_features(self, dialect: str) -> List[str]:
+        """Get key features for each database dialect"""
+        features = {
+            'mysql': [
+                'AUTO_INCREMENT', 'InnoDB Engine', 'MyISAM Engine', 'CHARSET utf8mb4',
+                'Partitioning', 'Foreign Keys', 'Full-text Indexing', 'JSON data type'
+            ],
+            'postgresql': [
+                'SERIAL/IDENTITY', 'JSONB', 'Array Types', 'CTEs', 'Window Functions',
+                'Table Partitioning', 'Concurrent Indexing', 'Schemas/Namespaces'
+            ],
+            'trino': [
+                'Cross-catalog Queries', 'Connector-based', 'Distributed Joins',
+                'Bucketing', 'Table Properties', 'Columnar Storage', 'Push-down Optimization'
+            ],
+            'spark': [
+                'Delta Tables', 'Schema Evolution', 'Partitioning', 'Z-ordering',
+                'ACID Transactions', 'Time Travel', 'Streaming Support', 'Broadcast Joins'
+            ]
+        }
+        return features.get(dialect, [])
     
     def parse_schema_response(self, content: str) -> tuple:
-        """Parse the LLM response into schema, explanation, and optimizations"""
+        """Parse the LLM response into schema, explanation, optimizations, and best_practices"""
         try:
             schema = ""
             explanation = ""
             optimizations = ""
+            best_practices = []
             
             if "[SCHEMA]" in content:
                 parts = content.split("[SCHEMA]", 1)
@@ -266,9 +371,15 @@ Focus on performance, scalability, and maintainability."""
                         schema = schema_part.strip()
                         
                         if "[OPTIMIZATIONS]" in rest:
-                            explanation_part, opt_part = rest.split("[OPTIMIZATIONS]", 1)
+                            explanation_part, opt_rest = rest.split("[OPTIMIZATIONS]", 1)
                             explanation = explanation_part.strip()
-                            optimizations = opt_part.strip()
+                            
+                            if "[BEST_PRACTICES]" in opt_rest:
+                                opt_part, bp_part = opt_rest.split("[BEST_PRACTICES]", 1)
+                                optimizations = opt_part.strip()
+                                best_practices = self.parse_best_practices(bp_part.strip())
+                            else:
+                                optimizations = opt_rest.strip()
                         else:
                             explanation = rest.strip()
                     else:
@@ -277,11 +388,58 @@ Focus on performance, scalability, and maintainability."""
                 # Fallback: use entire content as schema
                 schema = content.strip()
             
-            return schema, explanation, optimizations
+            return schema, explanation, optimizations, best_practices
             
         except Exception as e:
             logger.error(f"Error parsing response: {str(e)}")
-            return content.strip(), "", ""
+            return content.strip(), "", "", []
+    
+    def parse_best_practices(self, bp_content: str) -> List[Dict[str, str]]:
+        """Parse best practices section into structured format"""
+        practices = []
+        try:
+            # Simple parsing - split by numbered items or bullet points
+            lines = bp_content.split('\n')
+            current_practice = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Check if it's a new practice (starts with number or bullet)
+                if line[0].isdigit() or line.startswith('-') or line.startswith('*'):
+                    if current_practice:
+                        practices.append(current_practice)
+                    
+                    # Extract title (remove numbering/bullets)
+                    title = line.lstrip('0123456789.-* ').split(':')[0].strip()
+                    description = ':'.join(line.split(':')[1:]).strip() if ':' in line else line.lstrip('0123456789.-* ').strip()
+                    
+                    current_practice = {
+                        "title": title[:50],  # Limit title length
+                        "description": description,
+                        "category": "general"  # Default category
+                    }
+                    
+                    # Categorize based on keywords
+                    if any(keyword in line.lower() for keyword in ['index', 'performance', 'optimize', 'speed']):
+                        current_practice["category"] = "performance"
+                    elif any(keyword in line.lower() for keyword in ['security', 'auth', 'permission', 'access']):
+                        current_practice["category"] = "security"
+                else:
+                    # Continuation of current practice description
+                    if current_practice:
+                        current_practice["description"] += f" {line}"
+            
+            # Add the last practice
+            if current_practice:
+                practices.append(current_practice)
+                
+        except Exception as e:
+            logger.error(f"Error parsing best practices: {str(e)}")
+            
+        return practices[:10]  # Limit to 10 practices
 
 def main():
     """Test the schema generator"""

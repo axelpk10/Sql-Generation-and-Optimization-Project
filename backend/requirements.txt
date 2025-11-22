@@ -20,6 +20,10 @@ transformers
 flask
 flask-cors
 
+# Redis for project context storage
+redis
+redis-py
+
 # Environment and configuration
 python-dotenv
 pydantic
@@ -31,6 +35,9 @@ pandas
 # HTTP and utilities
 requests
 httpx
+
+# Date and time utilities
+python-dateutil
 
 # Development and testing
 pytest

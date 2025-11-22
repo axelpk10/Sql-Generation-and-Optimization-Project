@@ -35,7 +35,41 @@ def execute_query(query):
         # Execute the query
         result_df = spark.sql(query)
         
-        # Get schema information
+        # Check if this is a DDL/DML query by attempting to collect results
+        # DDL/DML queries will return empty DataFrame with no schema
+        try:
+            # Try to get schema - if None or empty, this is likely DDL/DML
+            if result_df.schema is None or len(result_df.schema.fields) == 0:
+                # DDL/DML query (CREATE, INSERT, UPDATE, DELETE, etc.)
+                query_upper = query.upper().strip()
+                query_type = 'Query'
+                if query_upper.startswith('CREATE'):
+                    query_type = 'CREATE'
+                elif query_upper.startswith('INSERT'):
+                    query_type = 'INSERT'
+                elif query_upper.startswith('UPDATE'):
+                    query_type = 'UPDATE'
+                elif query_upper.startswith('DELETE'):
+                    query_type = 'DELETE'
+                elif query_upper.startswith('DROP'):
+                    query_type = 'DROP'
+                elif query_upper.startswith('ALTER'):
+                    query_type = 'ALTER'
+                elif query_upper.startswith('TRUNCATE'):
+                    query_type = 'TRUNCATE'
+                
+                response = {
+                    "success": True,
+                    "message": f"{query_type} executed successfully",
+                    "query_type": query_type,
+                    "affected_rows": 0  # Spark doesn't always provide this info
+                }
+                print(json.dumps(response))
+                return True
+        except:
+            pass  # Continue to normal result processing
+        
+        # SELECT query - get results
         schema = [{"name": field.name, "type": str(field.dataType)} for field in result_df.schema.fields]
         
         # Collect results
@@ -48,14 +82,16 @@ def execute_query(query):
                     row_dict[key] = str(value)
             results.append(list(row_dict.values()))
         
-        # Prepare response
+        # Prepare response for SELECT query
         response = {
             "status": "success",
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "query": query,
             "schema": schema,
             "count": len(results),
-            "results": results
+            "results": results,
+            "columns": [field["name"] for field in schema],
+            "row_count": len(results)
         }
         
         # Print ONLY the JSON results - nothing else to stdout

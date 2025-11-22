@@ -53,7 +53,7 @@ def health_check():
 
 @app.route('/generate-schema', methods=['POST'])
 def generate_schema():
-    """Generate database schema from requirements"""
+    """Generate database schema from requirements with multi-dialect support"""
     start_time = time.time()
     
     try:
@@ -66,21 +66,46 @@ def generate_schema():
         
         data = request.get_json()
         requirements = data.get('requirements', '').strip()
+        dialect = data.get('dialect', 'postgresql').lower()
         
+        # NEW: Accept project context from frontend
+        project_id = data.get('project_id')
+        project_name = data.get('project_name')
+        
+        # Log context received
+        if project_id:
+            logger.info(f"📋 Processing schema generation for project: {project_name} (ID: {project_id})")
+        
+        # Validate requirements
         if not requirements:
             return jsonify({
                 "success": False,
                 "error": "Requirements field is required and cannot be empty"
             }), 400
         
-        logger.info(f"Received schema generation request: {requirements[:100]}...")
+        # Validate dialect
+        supported_dialects = ['mysql', 'postgresql', 'trino', 'spark']
+        if dialect not in supported_dialects:
+            return jsonify({
+                "success": False,
+                "error": f"Unsupported dialect: {dialect}. Supported dialects: {', '.join(supported_dialects)}"
+            }), 400
         
-        # Generate schema
-        result = schema_generator.generate_schema(requirements)
+        logger.info(f"Received schema generation request for {dialect}: {requirements[:100]}...")
+        
+        # Generate schema with dialect support
+        result = schema_generator.generate_schema(requirements, dialect)
         
         # Add API metadata
         result['api_response_time'] = time.time() - start_time
         result['timestamp'] = datetime.now().isoformat()
+        result['project_id'] = project_id
+        result['project_name'] = project_name
+        
+        # TODO: Save conversation to Redis via SQL Execution backend
+        # if project_id:
+        #     session_id = data.get("session_id", "default_session")
+        #     save_ai_conversation(project_id, session_id, requirements, result)
         
         return jsonify(result)
         
@@ -105,77 +130,8 @@ def get_analytics():
         logger.error(f"Error getting analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/analytics/quality', methods=['GET'])
-def get_quality_analytics():
-    """Get schema quality analytics"""
-    try:
-        top_quality = schema_analytics.get_top_quality_schemas(limit=10)
-        return jsonify({"top_quality_schemas": top_quality})
-    except Exception as e:
-        logger.error(f"Error getting quality analytics: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
-@app.route('/analytics/slow', methods=['GET'])
-def get_slow_generations():
-    """Get slow schema generations"""
-    try:
-        threshold = request.args.get('threshold', 10.0, type=float)
-        slow_generations = schema_analytics.get_slow_generations(threshold=threshold)
-        return jsonify({"slow_generations": slow_generations})
-    except Exception as e:
-        logger.error(f"Error getting slow generations: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
-@app.route('/analytics/trends', methods=['GET'])
-def get_usage_trends():
-    """Get usage trends over time"""
-    try:
-        days = request.args.get('days', 7, type=int)
-        trends = schema_analytics.get_usage_trends(days=days)
-        return jsonify(trends)
-    except Exception as e:
-        logger.error(f"Error getting trends: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/analytics/export', methods=['GET'])
-def export_analytics():
-    """Export comprehensive analytics as JSON"""
-    try:
-        hours = request.args.get('hours', 24, type=int)
-        analytics_json = schema_analytics.export_analytics(hours)
-        
-        from flask import Response
-        return Response(
-            analytics_json,
-            mimetype='application/json',
-            headers={'Content-Disposition': f'attachment; filename=schema_analytics_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'}
-        )
-    except Exception as e:
-        logger.error(f"Error exporting analytics: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/test-schema', methods=['GET'])
-def test_schema_generation():
-    """Test endpoint with sample schema generation"""
-    sample_requirements = """
-    Design a simple blog database schema with:
-    - Users (authentication and profiles)
-    - Blog posts with categories and tags
-    - Comments and replies
-    - Basic analytics tracking
-    """
-    
-    try:
-        result = schema_generator.generate_schema(sample_requirements)
-        result['note'] = "This is a test endpoint with sample requirements"
-        return jsonify(result)
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "note": "Test endpoint failed"
-        }), 500
 
 @app.errorhandler(404)
 def not_found(error):
@@ -185,8 +141,7 @@ def not_found(error):
         "available_endpoints": [
             "/health - Health check",
             "/generate-schema - Generate database schema (POST)",
-            "/analytics - View generation analytics",
-            "/test-schema - Test with sample requirements"
+            "/analytics - View generation analytics"
         ]
     }), 404
 
@@ -213,11 +168,6 @@ def main():
     print("   GET  /health - Health check")
     print("   POST /generate-schema - Generate database schema")
     print("   GET  /analytics - View performance analytics")
-    print("   GET  /analytics/quality - View quality analytics")
-    print("   GET  /analytics/slow - View slow generations")
-    print("   GET  /analytics/trends - View usage trends")
-    print("   GET  /analytics/export - Export analytics data")
-    print("   GET  /test-schema - Test endpoint")
     print("\n📖 API Documentation:")
     print("   POST /generate-schema")
     print("   Body: {\"requirements\": \"Your schema requirements here\"}")

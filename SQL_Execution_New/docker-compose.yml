@@ -60,6 +60,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis_cache
+    command: redis-server --appendonly yes --save 60 1000
+    volumes:
+      - redis_data:/data
     networks:
       - sql_network
     ports:
@@ -82,6 +85,7 @@ services:
 volumes:
   mysql_data:
   postgres_data:
+  redis_data:
 
 networks:
   sql_network:

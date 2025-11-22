@@ -82,6 +82,7 @@ class SchemaAnalytics:
                     optimization_size_chars INTEGER,
                     reranking_model TEXT,
                     llm_model TEXT,
+                    dialect TEXT,
                     success BOOLEAN,
                     error_message TEXT,
                     timestamp DATETIME,
@@ -228,7 +229,8 @@ class SchemaAnalytics:
                             error_message: Optional[str] = None,
                             user_id: Optional[str] = None,
                             reranking_model: str = "cohere",
-                            llm_model: str = "llama-3.3-70b") -> str:
+                            llm_model: str = "llama-3.3-70b",
+                            dialect: str = "postgresql") -> str:
         """Log complete schema generation metrics"""
         
         # Generate unique schema ID

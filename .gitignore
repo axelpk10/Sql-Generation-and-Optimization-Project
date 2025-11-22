@@ -109,3 +109,9 @@ dmypy.json
 # Exclude all markdown files except SETUP_GUIDE.md
 *.md
 !SETUP_GUIDE.md
+!trino_data.md
+!trino_documentation.md
+
+sample_csvs/
+*/csv_uploads/
+*/project_contexts/

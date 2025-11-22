@@ -1,8 +1,13 @@
 Flask
 Flask-CORS
 mysql-connector-python
+pymysql
 trino
 pyspark
 requests
 pandas
 numpy
+python-dotenv
+psycopg2-binary
+redis==5.0.1
+sqlparse
