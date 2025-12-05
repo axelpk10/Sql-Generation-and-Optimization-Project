@@ -115,9 +115,20 @@ class SchemaGenerator:
             logger.error(f"Error in reranking: {str(e)}")
             return documents[:top_n]
     
-    def generate_schema(self, requirements: str, dialect: str = "postgresql") -> Dict[str, Any]:
+    def generate_schema(self, requirements: str, dialect: str = "postgresql", conversation_context=None, existing_schema=None) -> Dict[str, Any]:
         """Generate database schema based on requirements for specific dialect"""
         start_time = time.time()
+        
+        logger.info(f"\n{'='*80}")
+        logger.info(f"SCHEMA GENERATOR - EXISTING SCHEMA CONTEXT CHECK")
+        logger.info(f"{'='*80}")
+        if existing_schema:
+            tables = existing_schema.get('tables', [])
+            logger.info(f"✅ Existing schema received: {len(tables)} tables")
+            logger.info(f"   Tables: {[t.get('name') for t in tables[:10]]}")
+        else:
+            logger.info(f"❌ No existing schema provided (existing_schema={existing_schema})")
+        logger.info(f"{'='*80}\n")
         
         try:
             # Validate dialect
@@ -149,8 +160,19 @@ class SchemaGenerator:
             # Prepare context
             context = "\n\n".join([doc.page_content for doc in reranked_docs])
             
-            # Create dialect-specific prompt
-            prompt = self.create_schema_prompt(requirements, context, dialect)
+            # Create dialect-specific prompt with conversation context AND existing schema
+            prompt = self.create_schema_prompt(requirements, context, dialect, conversation_context, existing_schema)
+            
+            # Log prompt preview to verify existing schema is included
+            logger.info(f"\n{'='*80}")
+            logger.info(f"FINAL PROMPT PREVIEW (first 1000 chars)")
+            logger.info(f"{'='*80}")
+            logger.info(prompt[:1000])
+            if "EXISTING DATABASE SCHEMA" in prompt:
+                logger.info(f"\n✅ EXISTING SCHEMA FOUND IN PROMPT")
+            else:
+                logger.info(f"\n❌ EXISTING SCHEMA NOT FOUND IN PROMPT")
+            logger.info(f"{'='*80}\n")
             
             # Get dialect-specific system prompt
             system_prompt = self.get_schema_prompt_template(dialect)
@@ -250,13 +272,15 @@ Your responses should be:
 
 Format your response as:
 [SCHEMA]
-<DDL statements>
+<DDL statements - PLAIN TEXT ONLY, NO MARKDOWN CODE FENCES, NO ```sql or ``` markers>
 [EXPLANATION]
 <Design rationale and best practices>
 [OPTIMIZATIONS]
 <Performance recommendations>
 [BEST_PRACTICES]
 <Categorized best practices with title, description, category>
+
+**CRITICAL: In the [SCHEMA] section, write ONLY pure SQL DDL statements. Do NOT wrap them in markdown code blocks (```sql). Write raw SQL only.**
 """
         
         dialect_specifics = {
@@ -309,11 +333,96 @@ SPARK SQL SPECIFIC REQUIREMENTS:
         
         return base_prompt + dialect_specifics.get(dialect, "")
     
-    def create_schema_prompt(self, requirements: str, context: str, dialect: str) -> str:
+    def create_schema_prompt(self, requirements: str, context: str, dialect: str, conversation_context=None, existing_schema=None) -> str:
         """Create dialect-specific prompt for schema generation"""
         dialect_features = self.get_dialect_features(dialect)
         
-        return f"""Based on the following database design documentation:
+        logger.info(f"\n{'='*80}")
+        logger.info(f"CREATE_SCHEMA_PROMPT - EXISTING SCHEMA CHECK")
+        logger.info(f"{'='*80}")
+        
+        # Add existing schema context
+        existing_schema_section = ""
+        if existing_schema and existing_schema.get('tables'):
+            tables = existing_schema['tables']
+            logger.info(f"✅ Building existing schema section with {len(tables)} tables")
+            logger.info(f"   First 3 tables: {[t.get('name') for t in tables[:3]]}")
+            
+            existing_schema_section = f"\n{'='*80}\n"
+            existing_schema_section += f"EXISTING DATABASE SCHEMA - {len(tables)} TABLES\n"
+            existing_schema_section += f"{'='*80}\n\n"
+            existing_schema_section += "**The database currently has these tables:**\n\n"
+            for table in tables[:20]:  # Limit to 20 tables
+                table_name = table.get('name', 'unknown')
+                columns = table.get('columns', 'N/A')
+                existing_schema_section += f"TABLE: {table_name}\n"
+                existing_schema_section += f"  Columns: {columns}\n\n"
+            existing_schema_section += f"{'='*80}\n"
+            existing_schema_section += "**CRITICAL INSTRUCTIONS - MUST FOLLOW:**\n"
+            existing_schema_section += "1. The database ALREADY HAS these tables - DO NOT recreate them\n"
+            existing_schema_section += "2. ONLY create NEW tables that are requested\n"
+            existing_schema_section += "3. Use foreign keys to reference existing table IDs (e.g., user_id references users, product_id references products)\n"
+            existing_schema_section += "4. Follow the existing naming conventions (e.g., if tables use plural names, continue that pattern)\n"
+            existing_schema_section += "5. Keep it SIMPLE - do not add unnecessary OLAP, data warehouse, or complex structures unless specifically requested\n"
+            existing_schema_section += "6. Match the existing column naming style and data types\n"
+            existing_schema_section += f"{'='*80}\n\n"
+            
+            logger.info(f"✅ Existing schema section built ({len(existing_schema_section)} chars)")
+        else:
+            logger.info(f"❌ No existing schema to inject (existing_schema={existing_schema})")
+        
+        logger.info(f"{'='*80}\n")
+        
+        # Add conversation context from Query Generator
+        conversation_section = ""
+        if conversation_context and conversation_context.get('queries'):
+            queries = conversation_context['queries']
+            conversation_section = f"\n\n**PREVIOUSLY GENERATED QUERIES ({len(queries)}):**\n"
+            conversation_section += "The Query Generator has created the following SQL queries in this conversation:\n"
+            for idx, query_item in enumerate(queries[-3:], 1):  # Last 3 queries to avoid token limits
+                query_sql = query_item.get('query', '')
+                if query_sql:
+                    conversation_section += f"\nQuery {idx}:\n```sql\n{query_sql[:300]}...\n```\n"
+            conversation_section += "\n**DESIGN SCHEMA to support these queries. Ensure tables, columns, and relationships match query requirements.**\n"
+        
+        # Determine if this is an extension request or new schema request
+        is_extension = existing_schema and existing_schema.get('tables')
+        
+        if is_extension:
+            # Extending existing schema - prioritize simplicity and integration
+            return f"""You are extending an existing database schema.
+
+{existing_schema_section}
+
+**USER REQUEST:** {requirements}
+{conversation_section}
+
+Target Database: {dialect.upper()}
+Dialect Features: {', '.join(dialect_features)}
+
+**YOUR TASK:**
+Create ONLY the NEW tables requested. DO NOT recreate existing tables. Keep it simple and focused.
+
+Design guidelines:
+1. Create minimal tables needed to fulfill the request
+2. Reference existing tables using foreign keys (user_id → users.id, product_id → products.id, etc.)
+3. Match existing naming patterns and data types
+4. Use appropriate {dialect.upper()} syntax and features
+
+Reference documentation (use only if helpful for syntax/features):
+{context[:500]}...
+
+Please provide:
+1. CREATE TABLE statements with {dialect}-appropriate data types
+2. Primary keys, foreign keys, and constraints specific to {dialect}
+3. Indexing strategies optimized for {dialect}
+4. Partitioning recommendations if applicable for {dialect}
+5. Best practices specific to {dialect} database
+
+Focus on {dialect}-specific performance, scalability, and maintainability features."""
+        else:
+            # New schema from scratch
+            return f"""Based on the following database design documentation:
 
 {context}
 
@@ -321,6 +430,7 @@ Target Database: {dialect.upper()}
 Dialect Features: {', '.join(dialect_features)}
 
 Requirements: {requirements}
+{conversation_section}
 
 Please design an optimal {dialect.upper()} database schema including:
 1. CREATE TABLE statements with {dialect}-appropriate data types
@@ -366,9 +476,15 @@ Focus on {dialect}-specific performance, scalability, and maintainability featur
                 if len(parts) > 1:
                     remaining = parts[1]
                     
+                    # Clean up markdown code fences that may have slipped in
+                    remaining = remaining.replace('```sql', '').replace('```', '')
+                    
                     if "[EXPLANATION]" in remaining:
                         schema_part, rest = remaining.split("[EXPLANATION]", 1)
+                        # Clean up the schema section
                         schema = schema_part.strip()
+                        # Remove any lingering markdown artifacts
+                        schema = schema.replace('```sql', '').replace('```', '').strip()
                         
                         if "[OPTIMIZATIONS]" in rest:
                             explanation_part, opt_rest = rest.split("[OPTIMIZATIONS]", 1)

@@ -305,7 +305,7 @@ export default function SQLEditor() {
 
                 <TabsContent
                   value="schema"
-                  className="flex-1 p-0 m-0 flex flex-col"
+                  className="flex-1 p-0 m-0 flex flex-col overflow-hidden h-[calc(100%-48px)]"
                 >
                   <CsvUpload
                     onUploadComplete={async (
@@ -322,7 +322,7 @@ export default function SQLEditor() {
                       }
                     }}
                   />
-                  <div className="flex-1">
+                  <div className="flex-1 overflow-hidden">
                     <SchemaPanel
                       project={currentProject}
                       isLoading={isLoadingSchema}
@@ -338,7 +338,7 @@ export default function SQLEditor() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="history" className="flex-1 p-0 m-0">
+                <TabsContent value="history" className="flex-1 p-0 m-0 overflow-hidden h-[calc(100%-48px)]">
                   <QueryHistory
                     project={currentProject}
                     onQuerySelect={(selectedQuery) => setQuery(selectedQuery)}
@@ -371,7 +371,7 @@ export default function SQLEditor() {
 
               {/* Results Panel */}
               <ResizablePanel defaultSize={50} minSize={20}>
-                <div className="h-full bg-gray-900/50">
+                <div className="h-full bg-gray-900/50 overflow-hidden">
                   <ResultsPanel
                     queryResult={queryResult}
                     error={queryError}

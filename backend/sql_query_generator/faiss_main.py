@@ -18,6 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from collections import defaultdict, deque
 from datetime import datetime
+import redis
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +48,20 @@ if not COHERE_API_KEY:
 
 # Initialize clients
 clientg = Groq(api_key=GROQ_API_KEY)
+
+# Initialize Redis client for conversation context
+try:
+    redis_client = redis.Redis(
+        host=os.getenv('REDIS_HOST', 'localhost'),
+        port=int(os.getenv('REDIS_PORT', 6379)),
+        db=0,
+        decode_responses=True
+    )
+    redis_client.ping()
+    print("✅ Redis client connected successfully")
+except Exception as e:
+    print(f"⚠️ Redis connection failed: {e}")
+    redis_client = None
 
 # Initialize FAISS vector store
 try:
@@ -155,35 +170,35 @@ def get_sql_query_template(dialect="trino"):
     
     info = dialect_info.get(dialect.lower(), dialect_info["trino"])
     
-    # CRITICAL: Add schema context injection point
-    schema_section = """
-    {{schema_context}}
-    """
+    # NOTE: Using regular string (not f-string) to preserve {{placeholders}} for .format()
+    template = """
+    You are an expert """ + info['name'] + """ SQL developer. Your task is to generate optimized """ + info['name'] + """ SQL queries 
+    that are syntactically correct, efficient, and follow """ + info['name'] + """ best practices.
     
-    return f"""
-    You are an expert {info['name']} SQL developer. Your task is to generate optimized {info['name']} SQL queries 
-    that are syntactically correct, efficient, and follow {info['name']} best practices.
+    Target Database: """ + info['name'] + """
+    Database Features: """ + info['features'] + """
+    Syntax Requirements: """ + info['syntax'] + """
     
-    Target Database: {info['name']}
-    Database Features: {info['features']}
-    Syntax Requirements: {info['syntax']}
-    {schema_section}
+    {schema_context}
     
     Given the following:
-    User Question: {{user_query}}
-    SQL Context from Documentation: {{context}}
+    User Question: {user_query}
+    SQL Context from Documentation: {context}
     
     Please provide:
-    1. A detailed {info['name']} SQL query that addresses the user's question
+    1. A detailed """ + info['name'] + """ SQL query that addresses the user's question
     2. An explanation of the query components
-    3. Any relevant {info['name']}-specific optimizations or best practices
+    3. Any relevant """ + info['name'] + """-specific optimizations or best practices
     
-    Requirements:
-    - Use {info['name']}-specific syntax and functions
-    - Follow {info['name']} performance best practices
-    - Ensure compatibility with {info['name']} standards
-    - Optimize for {info['name']} query execution patterns
-    - **CRITICAL: Use ONLY the table names provided in the schema context above. Do NOT invent table names.**
+    **CRITICAL RULES:**
+    - If schema context is provided above, you MUST use ONLY those exact table names and column names
+    - Do NOT invent, assume, or make up any table names that are not in the schema
+    - Do NOT use generic names like 'table', 'customer', 'order' unless they appear in the schema
+    - If the user asks about data that doesn't exist in the schema, politely inform them
+    - Use """ + info['name'] + """-specific syntax and functions
+    - Follow """ + info['name'] + """ performance best practices
+    - Ensure compatibility with """ + info['name'] + """ standards
+    - Optimize for """ + info['name'] + """ query execution patterns
     
     Format your response as:
     QUERY:
@@ -193,10 +208,12 @@ def get_sql_query_template(dialect="trino"):
     <detailed explanation>
     
     OPTIMIZATIONS:
-    <list of {info['name']}-specific optimizations>
+    <list of """ + info['name'] + """-specific optimizations>
     """
+    
+    return template
 
-def generate_sql_query(user_query, context, dialect="trino", schema_context=None):
+def generate_sql_query(user_query, context, dialect="trino", schema_context=None, conversation_context=None):
     """Generate a dialect-specific SQL query based on user input and context.
     
     Args:
@@ -204,6 +221,7 @@ def generate_sql_query(user_query, context, dialect="trino", schema_context=None
         context: Retrieved context from FAISS documentation
         dialect: SQL dialect (trino, mysql, postgresql, spark)
         schema_context: Optional dict with actual database schema
+        conversation_context: Optional dict with previous schemas from Schema Generator
     """
     try:
         dialect_descriptions = {
@@ -219,21 +237,41 @@ def generate_sql_query(user_query, context, dialect="trino", schema_context=None
         schema_section = ""
         if schema_context and schema_context.get('tables'):
             tables = schema_context['tables']
-            schema_section = f"\n**AVAILABLE DATABASE TABLES ({len(tables)} tables):**\n"
+            schema_section = f"\n{'='*80}\n"
+            schema_section += f"DATABASE SCHEMA - {len(tables)} TABLES AVAILABLE\n"
+            schema_section += f"{'='*80}\n\n"
+            schema_section += "**YOU MUST USE ONLY THESE TABLE NAMES - DO NOT MAKE UP TABLE NAMES:**\n\n"
             for table in tables[:20]:  # Limit to first 20 tables to avoid token limits
                 table_name = table.get('name', 'unknown')
                 columns = table.get('columns', 'N/A')
-                schema_section += f"- {table_name}: {columns}\n"
-            schema_section += "\n**IMPORTANT: Use ONLY these exact table names in your SQL queries. Do NOT invent or assume other table names.**\n"
+                schema_section += f"TABLE: {table_name}\n"
+                schema_section += f"  Columns: {columns}\n\n"
+            schema_section += f"{'='*80}\n"
+            schema_section += "**CRITICAL: The user's database contains ONLY the tables listed above.**\n"
+            schema_section += "**If you use a table name NOT in this list, the query will fail.**\n"
+            schema_section += f"{'='*80}\n\n"
         else:
             schema_section = ""
         
-        # Get template and inject schema context
+        # Add conversation context from Schema Generator
+        conversation_section = ""
+        if conversation_context and conversation_context.get('schemas'):
+            schemas = conversation_context['schemas']
+            conversation_section = f"\n**PREVIOUSLY GENERATED SCHEMAS ({len(schemas)}):**\n"
+            conversation_section += "The Schema Generator has created the following table structures in this conversation:\n"
+            for idx, schema_item in enumerate(schemas[-3:], 1):  # Last 3 schemas to avoid token limits
+                schema_ddl = schema_item.get('schema', '')
+                if schema_ddl:
+                    # Extract table names from CREATE TABLE statements
+                    conversation_section += f"\nSchema {idx}:\n```sql\n{schema_ddl[:500]}...\n```\n"
+            conversation_section += "\n**USE THESE SCHEMA DEFINITIONS when generating queries. These are the actual tables that exist.**\n"
+        
+        # Get template and inject schema context + conversation context
         prompt_template = get_sql_query_template(dialect)
         user_prompt = prompt_template.format(
             user_query=user_query,
             context=context,
-            schema_context=schema_section
+            schema_context=schema_section + conversation_section
         )
         
         chat_completion = clientg.chat.completions.create(
@@ -418,7 +456,45 @@ def collect_query_metrics(user_query, dialect, result, response_time, is_optimiz
     except Exception as e:
         print(f"Error collecting metrics: {str(e)}")
 
-def process_query(user_query, dialect="trino", schema_context=None):
+def get_conversation_context(project_id):
+    """
+    Fetch conversation history from Redis to get context from Schema Generator.
+    Returns schemas generated in previous messages.
+    """
+    if not redis_client or not project_id:
+        return None
+    
+    try:
+        session_key = f"ai_session:{project_id}:ai_assistant_session"
+        session_data = redis_client.get(session_key)
+        
+        if not session_data:
+            return None
+        
+        conversation = json.loads(session_data)
+        messages = conversation.get('messages', [])
+        
+        # Extract schemas from previous Schema Generator responses
+        schemas = []
+        for msg in messages:
+            if msg.get('role') == 'assistant' and msg.get('schema'):
+                schemas.append({
+                    'schema': msg['schema'],
+                    'explanation': msg.get('explanation', ''),
+                    'timestamp': msg.get('timestamp', '')
+                })
+        
+        if schemas:
+            print(f"📚 Retrieved {len(schemas)} schema(s) from conversation history")
+            return {'schemas': schemas}
+        
+        return None
+        
+    except Exception as e:
+        print(f"⚠️ Error fetching conversation context: {e}")
+        return None
+
+def process_query(user_query, dialect="trino", schema_context=None, project_id=None):
     """Process the user query and return relevant SQL information for the specified dialect.
     
     Args:
@@ -429,6 +505,7 @@ def process_query(user_query, dialect="trino", schema_context=None):
                 'tables': [{'name': str, 'columns': str}, ...],
                 'totalTables': int
             }
+        project_id: Optional project ID for fetching conversation context
     """
     if compression_retriever is None:
         return {
@@ -436,13 +513,22 @@ def process_query(user_query, dialect="trino", schema_context=None):
         }
     
     try:
+        # Fetch conversation context from Redis (previous schemas)
+        conversation_context = get_conversation_context(project_id)
+        
         # Retrieve relevant documentation using FAISS + Cohere reranking
         retrieved_docs = compression_retriever.get_relevant_documents(user_query)
         doc_context = "\n\n".join(doc.page_content for doc in retrieved_docs)
         context_summary = [doc.metadata.get('source', 'Unknown') for doc in retrieved_docs[:3]]
         
-        # Generate SQL query for specified dialect (with schema context!)
-        generated_content = generate_sql_query(user_query, doc_context, dialect, schema_context=schema_context)
+        # Generate SQL query for specified dialect (with schema context AND conversation context!)
+        generated_content = generate_sql_query(
+            user_query, 
+            doc_context, 
+            dialect, 
+            schema_context=schema_context,
+            conversation_context=conversation_context
+        )
         
         # Parse the generated content into structured sections
         parsed_sections = parse_generated_content(generated_content)
@@ -485,10 +571,8 @@ def generate_sql_query_endpoint():
         schema_context = data.get("schema_context")  # Contains tables with columns
         
         # Log context received
-        if project_id:
-            print(f"📋 Processing query for project: {project_name} (ID: {project_id})")
-            if schema_context and schema_context.get('tables'):
-                print(f"   Schema context: {schema_context.get('totalTables', 0)} tables available")
+        if project_id and schema_context and schema_context.get('tables'):
+            print(f"📋 Query for {project_name}: {schema_context.get('totalTables', 0)} tables in context")
         
         # Validate dialect
         supported_dialects = ["trino", "mysql", "postgresql", "spark"]
@@ -506,8 +590,8 @@ def generate_sql_query_endpoint():
                 "timestamp": time.time()
             }), 400
         
-        # Process the query (passing schema context for enhanced prompts)
-        result = process_query(user_query, dialect, schema_context=schema_context)
+        # Process the query (passing schema context AND project_id for conversation context)
+        result = process_query(user_query, dialect, schema_context=schema_context, project_id=project_id)
         response_time = time.time() - start_time
         
         if "error" in result:

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, Send, User, Sparkles, Copy, Check, Database } from "lucide-react";
+import { Bot, Send, User, Sparkles, Copy, Check, Database, Trash2 } from "lucide-react";
 
 interface Project {
   id: string;
@@ -45,9 +45,31 @@ export function SchemaGenerationChat({ project }: SchemaGenerationChatProps) {
   const selectedDialect = project.dialect || "mysql"; // Auto-select from project
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [schema, setSchema] = useState<any>(null);
 
-  // Load conversation history on mount (shared session with query chat)
+  // Load schema and conversation history on mount
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Fetch current schema
+        const schemaResponse = await fetch(
+          `http://localhost:8000/api/projects/${project.id}/schema`
+        );
+        if (schemaResponse.ok) {
+          const schemaData = await schemaResponse.json();
+          setSchema(schemaData.schema);
+          console.log(
+            "Loaded project schema:",
+            schemaData.schema?.tables?.length || 0,
+            "tables"
+          );
+        }
+      } catch (error) {
+        console.error("Failed to fetch schema:", error);
+      }
+    };
+    
     const loadConversation = async () => {
       try {
         const sessionId = "ai_assistant_session"; // Shared session for both query and schema
@@ -81,8 +103,47 @@ export function SchemaGenerationChat({ project }: SchemaGenerationChatProps) {
         console.error("Failed to load conversation:", error);
       }
     };
+    
+    loadData();
     loadConversation();
   }, [project.id]);
+
+  const handleClearChat = async () => {
+    if (!confirm("Are you sure you want to clear the chat history? This will reset the conversation context for both SQL Query and Schema Generation.")) {
+      return;
+    }
+
+    setIsClearing(true);
+    try {
+      const sessionId = "ai_assistant_session";
+      const response = await fetch(
+        `http://localhost:8000/api/context/ai/${project.id}/session/${sessionId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (response.ok) {
+        // Reset to initial welcome message
+        setMessages([
+          {
+            role: "assistant",
+            content: `Hello! I'm your AI Assistant for ${
+              project.name
+            }. I can help you with SQL queries and database schemas for your ${project.dialect.toUpperCase()} project. Your conversation history is shared across all AI features. How can I help you today?`,
+          },
+        ]);
+        console.log("✅ Chat history cleared");
+      } else {
+        throw new Error("Failed to clear chat history");
+      }
+    } catch (error) {
+      console.error("Error clearing chat:", error);
+      alert("Failed to clear chat history. Please try again.");
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -138,11 +199,31 @@ export function SchemaGenerationChat({ project }: SchemaGenerationChatProps) {
 
     const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
-    saveMessageToRedis(userMessage); // Save to Redis
-    setInput("");
     setIsLoading(true);
 
     try {
+      // Prepare existing schema context
+      const existingSchemaContext = schema
+        ? {
+            tables:
+              schema.tables?.map((t: any) => ({
+                name: t.name,
+                columns:
+                  t.columns
+                    ?.map((c: any) => `${c.name} (${c.type})`)
+                    .join(", ") || "",
+              })) || [],
+            totalTables: schema.tables?.length || 0,
+          }
+        : null;
+
+      console.log(
+        "[SchemaGen Frontend] Sending existing_schema:",
+        existingSchemaContext
+          ? `${existingSchemaContext.totalTables} tables: ${existingSchemaContext.tables.slice(0, 3).map((t: any) => t.name).join(", ")}`
+          : "null"
+      );
+
       const response = await fetch("http://localhost:5001/generate-schema", {
         method: "POST",
         headers: {
@@ -153,6 +234,7 @@ export function SchemaGenerationChat({ project }: SchemaGenerationChatProps) {
           dialect: selectedDialect,
           project_id: project.id,
           project_name: project.name,
+          existing_schema: existingSchemaContext,
         }),
       });
 
@@ -209,10 +291,22 @@ export function SchemaGenerationChat({ project }: SchemaGenerationChatProps) {
       {/* Project Dialect Indicator */}
       <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
         <div className="flex items-center justify-between">
-          <label className="text-sm text-gray-400">Database Dialect:</label>
-          <span className="px-3 py-1 rounded-md text-sm font-medium bg-purple-600 text-white">
-            {selectedDialect.toUpperCase()}
-          </span>
+          <div className="flex-1">
+            <label className="text-sm text-gray-400">Database Dialect:</label>
+            <span className="ml-3 px-3 py-1 rounded-md text-sm font-medium bg-purple-600 text-white">
+              {selectedDialect.toUpperCase()}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearChat}
+            disabled={isClearing || messages.length <= 1}
+            className="text-red-400 hover:text-red-300 hover:bg-red-950/50"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear Chat
+          </Button>
         </div>
         <p className="text-xs text-gray-500 mt-1">
           Auto-selected from project settings

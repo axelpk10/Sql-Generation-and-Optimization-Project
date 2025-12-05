@@ -311,8 +311,9 @@ export function ResultsPanel({
       </div>
 
       {/* Results Table */}
-      <ScrollArea className="flex-1">
-        <Table>
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <Table>
           <TableHeader className="sticky top-0 bg-gray-800 z-10">
             <TableRow className="border-gray-700 hover:bg-gray-800">
               {columns.map((column, index) => (
@@ -348,8 +349,9 @@ export function ResultsPanel({
               </TableRow>
             ))}
           </TableBody>
-        </Table>
-      </ScrollArea>
+          </Table>
+        </ScrollArea>
+      </div>
 
       {/* Results Footer */}
       <div className="p-3 border-t border-gray-700 bg-gray-800/30">

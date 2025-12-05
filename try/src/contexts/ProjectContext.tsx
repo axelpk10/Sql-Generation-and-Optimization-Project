@@ -306,9 +306,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     try {
       // Load schema
       const schemaResponse = await fetch(
-        `${API_BASE_URL}/api/context/schema/${projectId}`
+        `${API_BASE_URL}/api/projects/${projectId}/schema`
       );
-      const schema = schemaResponse.ok ? await schemaResponse.json() : null;
+      const schemaData = schemaResponse.ok ? await schemaResponse.json() : null;
+      const schema = schemaData?.schema || null;
 
       // Load recent query intents (limit to 20 for display)
       const intentsResponse = await fetch(
@@ -422,7 +423,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   ): Promise<ProjectMetadata["schema"] | null> => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/context/schema/${projectId}`
+        `${API_BASE_URL}/api/projects/${projectId}/schema`
       );
 
       if (response.ok) {

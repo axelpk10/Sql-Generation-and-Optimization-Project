@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 import sqlite3
 import os
+import redis
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +25,58 @@ CORS(app)  # Enable CORS for cross-origin requests
 
 # Initialize schema generator
 schema_generator = SchemaGenerator()
+
+# Initialize Redis client for conversation context
+try:
+    redis_client = redis.Redis(
+        host=os.getenv('REDIS_HOST', 'localhost'),
+        port=int(os.getenv('REDIS_PORT', 6379)),
+        db=0,
+        decode_responses=True
+    )
+    redis_client.ping()
+    print("✅ Redis client connected successfully")
+except Exception as e:
+    print(f"⚠️ Redis connection failed: {e}")
+    redis_client = None
+
+def get_conversation_context(project_id):
+    """
+    Fetch conversation history from Redis to get context from Query Generator.
+    Returns queries generated in previous messages.
+    """
+    if not redis_client or not project_id:
+        return None
+    
+    try:
+        session_key = f"ai_session:{project_id}:ai_assistant_session"
+        session_data = redis_client.get(session_key)
+        
+        if not session_data:
+            return None
+        
+        conversation = json.loads(session_data)
+        messages = conversation.get('messages', [])
+        
+        # Extract queries from previous Query Generator responses
+        queries = []
+        for msg in messages:
+            if msg.get('role') == 'assistant' and msg.get('sqlQuery'):
+                queries.append({
+                    'query': msg['sqlQuery'],
+                    'explanation': msg.get('explanation', ''),
+                    'timestamp': msg.get('timestamp', '')
+                })
+        
+        if queries:
+            print(f"📚 Retrieved {len(queries)} query(ies) from conversation history")
+            return {'queries': queries}
+        
+        return None
+        
+    except Exception as e:
+        print(f"⚠️ Error fetching conversation context: {e}")
+        return None
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -71,10 +125,16 @@ def generate_schema():
         # NEW: Accept project context from frontend
         project_id = data.get('project_id')
         project_name = data.get('project_name')
+        existing_schema = data.get('existing_schema')  # Current database schema
         
         # Log context received
         if project_id:
             logger.info(f"📋 Processing schema generation for project: {project_name} (ID: {project_id})")
+            if existing_schema and existing_schema.get('tables'):
+                logger.info(f"   📊 Existing schema: {existing_schema.get('totalTables', 0)} tables")
+                logger.info(f"   📊 Existing schema tables: {[t.get('name') for t in existing_schema.get('tables', [])[:5]]}...")
+            else:
+                logger.info(f"   📊 No existing schema provided (existing_schema={existing_schema})")
         
         # Validate requirements
         if not requirements:
@@ -93,8 +153,11 @@ def generate_schema():
         
         logger.info(f"Received schema generation request for {dialect}: {requirements[:100]}...")
         
-        # Generate schema with dialect support
-        result = schema_generator.generate_schema(requirements, dialect)
+        # Fetch conversation context from Redis (previous queries)
+        conversation_context = get_conversation_context(project_id)
+        
+        # Generate schema with dialect support, conversation context, AND existing schema
+        result = schema_generator.generate_schema(requirements, dialect, conversation_context, existing_schema)
         
         # Add API metadata
         result['api_response_time'] = time.time() - start_time

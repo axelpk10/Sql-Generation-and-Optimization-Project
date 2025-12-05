@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import subprocess
 import tempfile
@@ -101,7 +101,7 @@ def normalize_dialect(project):
                 'migratedFrom': dialect,
                 'migratedAt': datetime.now().isoformat()
             })
-            logger.info(f"🔄 Auto-migrated project {project['id']}: {dialect} → analytics (actualEngine={dialect})")
+            logger.info(f"[REFRESH] Auto-migrated project {project['id']}: {dialect} → analytics (actualEngine={dialect})")
             project['dialect'] = 'analytics'
             project['actualEngine'] = dialect
     
@@ -125,20 +125,21 @@ def get_project_or_error(project_id):
     # Normalize legacy dialects
     project = normalize_dialect(project)
     
-    logger.info(f"✅ Fetched project {project_id} from Redis: dialect={project.get('dialect')}, database={project.get('database')}")
+    logger.info(f"[SUCCESS] Fetched project {project_id} from Redis: dialect={project.get('dialect')}, database={project.get('database')}")
     return project, None, None
 
 
 def extract_tables_from_query(query):
     """Extract table names from SQL query (basic regex-based extraction)"""
     try:
-        # Simple regex to find table names after FROM, JOIN, INTO, UPDATE keywords
+        # Regex to find table names from various SQL clauses
         patterns = [
-            r'FROM\s+([a-zA-Z0-9_]+)',
-            r'JOIN\s+([a-zA-Z0-9_]+)',
-            r'INTO\s+([a-zA-Z0-9_]+)',
-            r'UPDATE\s+([a-zA-Z0-9_]+)',
-            r'TABLE\s+([a-zA-Z0-9_]+)'
+            r'FROM\s+([a-zA-Z0-9_]+)',           # SELECT FROM, DELETE FROM
+            r'JOIN\s+([a-zA-Z0-9_]+)',           # INNER/LEFT/RIGHT JOIN
+            r'INTO\s+([a-zA-Z0-9_]+)',           # INSERT INTO
+            r'UPDATE\s+([a-zA-Z0-9_]+)',         # UPDATE table
+            r'TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([a-zA-Z0-9_]+)',  # CREATE/DROP TABLE
+            r'REFERENCES\s+([a-zA-Z0-9_]+)',     # FOREIGN KEY REFERENCES
         ]
         
         tables = set()
@@ -194,11 +195,27 @@ def rewrite_query_with_prefix(query, project_id):
         # Get all table names from the query
         table_names = extract_tables_from_query(query)
         
+        # SQL keywords that should never be prefixed
+        sql_keywords = {
+            'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'SET', 'NULL', 'DEFAULT',
+            'UPDATE', 'DELETE', 'INSERT', 'SELECT', 'WHERE', 'FROM', 'JOIN',
+            'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE',
+            'INNER', 'LEFT', 'RIGHT', 'OUTER', 'FULL', 'CROSS',
+            'PRIMARY', 'FOREIGN', 'KEY', 'REFERENCES', 'UNIQUE', 'CHECK',
+            'INDEX', 'CONSTRAINT', 'TABLE', 'VIEW', 'DATABASE', 'SCHEMA',
+            'CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'NOW',
+            'ENGINE', 'CHARSET', 'COLLATE', 'AUTO_INCREMENT', 'SERIAL'
+        }
+        
         # Replace each table name with prefixed version
         rewritten_query = query
         for table_name in table_names:
             # Skip if already prefixed
             if table_name.startswith('proj_'):
+                continue
+            
+            # Skip SQL keywords
+            if table_name.upper() in sql_keywords:
                 continue
             
             # Create regex pattern to match table name (word boundary)
@@ -207,7 +224,7 @@ def rewrite_query_with_prefix(query, project_id):
             prefixed_name = add_table_prefix(table_name, project_id)
             rewritten_query = re.sub(pattern, prefixed_name, rewritten_query, flags=re.IGNORECASE)
         
-        logger.info(f"🔄 Query rewritten with prefix: {query[:50]}... -> {rewritten_query[:50]}...")
+        logger.info(f"[REFRESH] Query rewritten with prefix: {query[:50]}... -> {rewritten_query[:50]}...")
         return rewritten_query
         
     except Exception as e:
@@ -249,7 +266,7 @@ def save_query_intent_helper(project_id, query, execution_time_ms, was_successfu
         
         # Auto-invalidate schema cache if DDL query executed successfully
         if was_successful and is_ddl_query(query):
-            logger.info(f"🔄 DDL query detected, invalidating schema cache for project {project_id}")
+            logger.info(f"[REFRESH] DDL query detected, invalidating schema cache for project {project_id}")
             context_mgr.invalidate_schema(project_id)
             
     except Exception as e:
@@ -1143,7 +1160,7 @@ def get_project_schema(project_id):
         cached_schema = context_mgr.get_schema(project_id)
         
         if cached_schema:
-            logger.info(f"✅ Returning cached schema for project {project_id}: {len(cached_schema.get('tables', []))} tables")
+            logger.info(f"[SUCCESS] Returning cached schema for project {project_id}: {len(cached_schema.get('tables', []))} tables")
             return jsonify({
                 'success': True,
                 'schema': cached_schema,
@@ -1151,7 +1168,7 @@ def get_project_schema(project_id):
             })
         else:
             # Schema not cached - return empty schema
-            logger.info(f"⚠️ No cached schema for project {project_id}, returning empty schema")
+            logger.info(f"[WARNING] No cached schema for project {project_id}, returning empty schema")
             return jsonify({
                 'success': True,
                 'schema': {
@@ -1183,8 +1200,11 @@ def discover_schema(project_id):
         
         # Get force_refresh flag from request (optional)
         force_refresh = False
-        if request.json:
-            force_refresh = request.json.get('forceRefresh', False)
+        try:
+            if request.is_json and request.json:
+                force_refresh = request.json.get('forceRefresh', False)
+        except:
+            pass  # No JSON body, use default
         
         # Check if schema is cached in Redis (unless force refresh)
         if not force_refresh:
@@ -1511,7 +1531,7 @@ def upload_csv():
                 engine_used = 'mysql'
                 optimal_query_engine = 'mysql'
                 query_tip = f"Query with MySQL: SELECT * FROM sales.{table_name}"
-                logger.info(f"✅ Loaded {len(df)} rows into MySQL table: {table_name} ({file_size_mb:.2f} MB)")
+                logger.info(f"[SUCCESS] Loaded {len(df)} rows into MySQL table: {table_name} ({file_size_mb:.2f} MB)")
             except Exception as e:
                 logger.error(f"Failed to load to MySQL: {e}")
                 engine_used = 'file'
@@ -1525,7 +1545,7 @@ def upload_csv():
                 engine_used = 'postgresql'
                 optimal_query_engine = 'postgresql'
                 query_tip = f"Query with PostgreSQL: SELECT * FROM analytics.{table_name}"
-                logger.info(f"✅ Loaded {len(df)} rows into PostgreSQL table: {table_name} ({file_size_mb:.2f} MB)")
+                logger.info(f"[SUCCESS] Loaded {len(df)} rows into PostgreSQL table: {table_name} ({file_size_mb:.2f} MB)")
             except Exception as e:
                 logger.error(f"Failed to load to PostgreSQL: {e}")
                 engine_used = 'file'
@@ -1541,7 +1561,7 @@ def upload_csv():
                     engine_used = 'postgresql'
                     optimal_query_engine = 'trino'
                     query_tip = f"Query with Trino: SELECT * FROM postgresql.analytics.{table_name}"
-                    logger.info(f"✅ Loaded {len(df)} rows into PostgreSQL table: {table_name} ({file_size_mb:.2f} MB)")
+                    logger.info(f"[SUCCESS] Loaded {len(df)} rows into PostgreSQL table: {table_name} ({file_size_mb:.2f} MB)")
                 except Exception as e:
                     logger.error(f"Failed to load to PostgreSQL: {e}")
                     engine_used = 'file'
@@ -1554,7 +1574,7 @@ def upload_csv():
                     engine_used = 'spark'
                     optimal_query_engine = 'spark'
                     query_tip = f"Query with Spark: SELECT * FROM {table_name}"
-                    logger.info(f"✅ Loaded {len(df)} rows into Spark table: {table_name} ({file_size_mb:.2f} MB)")
+                    logger.info(f"[SUCCESS] Loaded {len(df)} rows into Spark table: {table_name} ({file_size_mb:.2f} MB)")
                 except Exception as e:
                     logger.error(f"Failed to load to Spark: {e}")
                     engine_used = 'file'
@@ -1594,12 +1614,12 @@ def upload_csv():
                 # Legacy projects: Track actual engine (for backward compatibility)
                 if not project.get('actualEngine'):
                     metadata_updates['actualEngine'] = optimal_query_engine
-                    logger.info(f"📝 Legacy project {project_id}: tracking actualEngine as {optimal_query_engine}")
+                    logger.info(f"[NOTE] Legacy project {project_id}: tracking actualEngine as {optimal_query_engine}")
             
             # Apply metadata updates to Redis
             if metadata_updates:
                 context_mgr.update_project_metadata(project_id, metadata_updates)
-                logger.info(f"✅ Updated project {project_id} metadata in Redis: {metadata_updates}")
+                logger.info(f"[SUCCESS] Updated project {project_id} metadata in Redis: {metadata_updates}")
         
         # Update project context with upload information
         context_file = CONTEXT_STORAGE_DIR / f"{project_id}.json"
@@ -1648,7 +1668,7 @@ def upload_csv():
         
         # Invalidate schema cache after successful CSV upload
         if engine_used != 'file':  # Only if data was actually loaded to a database
-            logger.info(f"🔄 CSV upload completed, invalidating schema cache for project {project_id}")
+            logger.info(f"[REFRESH] CSV upload completed, invalidating schema cache for project {project_id}")
             context_mgr.invalidate_schema(project_id)
         
         return jsonify({
@@ -1927,6 +1947,22 @@ def get_ai_session(project_id, session_id):
             
     except Exception as e:
         logger.error(f"Error retrieving AI session: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/context/ai/<project_id>/session/<session_id>', methods=['DELETE'])
+def delete_ai_session(project_id, session_id):
+    """Delete AI conversation session (clear chat history)"""
+    try:
+        success = context_mgr.delete_ai_session(project_id, session_id)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Session cleared successfully'})
+        else:
+            return jsonify({'error': 'Session not found'}), 404
+            
+    except Exception as e:
+        logger.error(f"Error deleting AI session: {e}")
         return jsonify({'error': str(e)}), 500
 
 

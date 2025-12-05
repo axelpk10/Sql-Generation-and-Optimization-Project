@@ -117,6 +117,8 @@ function DashboardContent() {
         "Interactive SQL editor with schema discovery and query execution",
       status: "Active",
       color: "from-blue-500 to-purple-500",
+      onClick: () => router.push("/sql-editor"),
+      buttonText: "Open Editor",
     },
     {
       icon: <Brain className="h-8 w-8" />,
@@ -125,6 +127,8 @@ function DashboardContent() {
         "Generate optimized SQL queries and database schemas using AI",
       status: "Active",
       color: "from-purple-500 to-pink-500",
+      onClick: () => router.push("/ai-assistant"),
+      buttonText: "Open AI Chat",
     },
     {
       icon: <Activity className="h-8 w-8" />,
@@ -132,20 +136,26 @@ function DashboardContent() {
       description: "Monitor backend services and system health status",
       status: "Active",
       color: "from-emerald-500 to-teal-500",
+      onClick: () => router.push("/health"),
+      buttonText: "View Health",
     },
     {
       icon: <BarChart3 className="h-8 w-8" />,
       title: "Query Analytics",
       description: "Analyze query performance and optimization opportunities",
-      status: "Coming Soon",
+      status: "Active",
       color: "from-green-500 to-emerald-500",
+      onClick: () => router.push("/analytics"),
+      buttonText: "View Analytics",
     },
     {
-      icon: <Zap className="h-8 w-8" />,
-      title: "Schema Generator",
-      description: "AI-powered database schema generation and visualization",
-      status: "Coming Soon",
-      color: "from-yellow-500 to-orange-500",
+      icon: <Database className="h-8 w-8" />,
+      title: "Schema Visualizer",
+      description: "Interactive ER diagram with automatic relationship detection",
+      status: "Active",
+      color: "from-cyan-500 to-blue-500",
+      onClick: () => router.push("/schema-visualizer"),
+      buttonText: "View Schema",
     },
     {
       icon: <FileText className="h-8 w-8" />,
@@ -452,22 +462,10 @@ function DashboardContent() {
                     <Button
                       variant="ghost"
                       className="w-full text-gray-300 hover:text-white hover:bg-white/10 group-hover:bg-blue-600/20 transition-all"
-                      onClick={() => {
-                        if (feature.title === "SQL Editor")
-                          router.push("/sql-editor");
-                        else if (feature.title === "AI Assistant")
-                          router.push("/ai-assistant");
-                        else if (feature.title === "Health Check")
-                          router.push("/health");
-                      }}
+                      onClick={feature.onClick}
+                      disabled={!feature.onClick}
                     >
-                      {feature.title === "SQL Editor"
-                        ? "Open Editor"
-                        : feature.title === "AI Assistant"
-                        ? "Open AI Chat"
-                        : feature.title === "Health Check"
-                        ? "Check Status"
-                        : "Learn More"}
+                      {feature.buttonText || "Learn More"}
                       <ChevronRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </CardContent>

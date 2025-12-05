@@ -1,4 +1,4 @@
-"""
+﻿"""
 Context Manager for Redis-based Project Context Storage
 Handles all project context operations: metadata, schema, AI, query intents
 """
@@ -197,6 +197,15 @@ class ContextManager:
             return None
         
         return self._safe_operation("get_ai_session", operation, None)
+    
+    def delete_ai_session(self, project_id: str, session_id: str) -> bool:
+        """Delete AI conversation session (clear chat history)"""
+        def operation():
+            key = f"project:{project_id}:ai:session:{session_id}"
+            result = self.redis.delete(key)
+            return result > 0  # Returns True if key was deleted
+        
+        return self._safe_operation("delete_ai_session", operation, False)
     
     def list_ai_sessions(self, project_id: str) -> List[Dict[str, Any]]:
         """List all AI sessions for project"""

@@ -191,8 +191,9 @@ export function SchemaPanel({
       </div>
 
       {/* Tables List */}
-      <ScrollArea className="flex-1">
-        <div className="p-2">
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-2">
           {/* Show hierarchical view for Trino with catalogs */}
           {isTrinoProject &&
           groupedTables &&
@@ -396,8 +397,9 @@ export function SchemaPanel({
                   )}
                 </div>
               ))}
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* Footer */}
       <div className="p-3 border-t border-gray-700">
