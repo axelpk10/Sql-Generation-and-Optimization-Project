@@ -291,19 +291,26 @@ class ContextManager:
     def get_project_stats(self, project_id: str) -> Dict[str, Any]:
         """Get project statistics"""
         def operation():
+            # Get schema data
+            schema = self.get_schema(project_id)
+            
             stats = {
                 'projectId': project_id,
                 'hasMetadata': bool(self.get_project_metadata(project_id)),
-                'hasSchema': bool(self.get_schema(project_id)),
+                'hasSchema': bool(schema),
+                'schema': schema,  # Include full schema object with tables
                 'aiSessionCount': len(self.list_ai_sessions(project_id)),
                 'queryIntentCount': len(self.get_query_intents(project_id)),
+                'totalQueryIntents': len(self.get_query_intents(project_id)),  # Add dashboard-expected field
                 'timestamp': datetime.now().isoformat()
             }
             return stats
         
         return self._safe_operation("get_project_stats", operation, {
             'projectId': project_id,
-            'error': 'Redis unavailable'
+            'error': 'Redis unavailable',
+            'totalQueryIntents': 0,
+            'schema': None
         })
     
     def health_check(self) -> Dict[str, Any]:

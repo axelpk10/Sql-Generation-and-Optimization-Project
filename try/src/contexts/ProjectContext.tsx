@@ -84,7 +84,7 @@ interface ProjectContextType {
   preferences: UserPreferences;
 
   // Project management
-  setCurrentProject: (project: Project | null) => void;
+  setCurrentProject: (project: Project | null) => Promise<void>;
   addProject: (project: Project) => Promise<void>;
   updateProject: (
     projectId: string,
@@ -120,7 +120,7 @@ interface ProjectContextType {
   getProjectStats: (projectId: string) => Promise<any>;
 
   // Cleanup
-  clearAllContext: () => void;
+  clearAllContext: () => Promise<void>;
 }
 
 const defaultPreferences: UserPreferences = {
@@ -516,11 +516,29 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   // CLEANUP
   // ============================================================================
 
-  const clearAllContext = () => {
-    localStorage.clear();
-    setProjects([]);
-    setCurrentProjectState(null);
-    setPreferences(defaultPreferences);
+  const clearAllContext = async () => {
+    try {
+      // Delete all projects from backend
+      const deletePromises = projects.map(project =>
+        fetch(`${API_BASE_URL}/api/context/project/${project.id}`, {
+          method: "DELETE",
+        })
+      );
+      await Promise.all(deletePromises);
+      
+      // Clear local state
+      localStorage.clear();
+      setProjects([]);
+      setCurrentProjectState(null);
+      setPreferences(defaultPreferences);
+    } catch (error) {
+      console.error("Failed to clear all projects:", error);
+      // Still clear local state even if backend fails
+      localStorage.clear();
+      setProjects([]);
+      setCurrentProjectState(null);
+      setPreferences(defaultPreferences);
+    }
   };
 
   // ============================================================================

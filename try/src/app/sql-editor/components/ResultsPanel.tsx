@@ -286,10 +286,9 @@ export function ResultsPanel({
 
           <div className="flex items-center space-x-2">
             <Button
-              variant="outline"
               size="sm"
               onClick={copyToClipboard}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0"
               title="Copy to clipboard"
             >
               <Copy className="h-4 w-4 mr-1" />
@@ -297,10 +296,9 @@ export function ResultsPanel({
             </Button>
 
             <Button
-              variant="outline"
               size="sm"
               onClick={exportToCSV}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0"
               title="Export as CSV"
             >
               <Download className="h-4 w-4 mr-1" />

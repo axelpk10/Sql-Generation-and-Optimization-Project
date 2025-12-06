@@ -120,7 +120,7 @@ export function QueryHistory({ project, onQuerySelect }: QueryHistoryProps) {
       </div>
 
       {/* History List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 h-[calc(100vh-250px)]">
         <div className="p-2 space-y-2">
           {queryHistory
             ?.slice()

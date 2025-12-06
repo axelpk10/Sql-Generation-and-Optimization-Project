@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,10 +10,11 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { Brain, Zap, Database, BarChart3, Rocket, Lock } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
       {/* Navigation */}
       <nav className="border-b border-white/10 backdrop-blur-md bg-black/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -33,20 +36,16 @@ export default function Home() {
               <Button
                 variant="ghost"
                 className="text-white hover:text-purple-300"
+                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 Features
               </Button>
               <Button
+                asChild
                 variant="ghost"
                 className="text-white hover:text-purple-300"
               >
-                Documentation
-              </Button>
-              <Button
-                asChild
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              >
-                <Link href="/auth/login">Sign In</Link>
+                <Link href="/docs">Documentation</Link>
               </Button>
             </div>
           </div>
@@ -57,7 +56,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
           <Badge className="mb-6 bg-purple-500/20 text-purple-300 border-purple-500/30">
-            🚀 Advanced SQL Optimization Platform
+            Advanced SQL Optimization Platform
           </Badge>
 
           <h1 className="text-6xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-purple-200 to-blue-200 leading-tight mb-8">
@@ -79,13 +78,12 @@ export default function Home() {
               size="lg"
               className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-lg px-8 py-4"
             >
-              <Link href="/auth/register">Get Started →</Link>
+              <Link href="/auth/register">Get Started</Link>
             </Button>
             <Button
               asChild
               size="lg"
-              variant="outline"
-              className="border-purple-500/50 text-purple-300 hover:bg-purple-500/10 text-lg px-8 py-4"
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-lg px-8 py-4"
             >
               <Link href="/auth/login">Sign In</Link>
             </Button>
@@ -94,7 +92,7 @@ export default function Home() {
       </div>
 
       {/* Features Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <div id="features" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold text-white mb-4">
             Next-Generation SQL Platform
@@ -109,19 +107,19 @@ export default function Home() {
           <Card className="bg-gradient-to-br from-purple-900/50 to-blue-900/50 border-purple-500/30 hover:border-purple-400/50 transition-all duration-300">
             <CardHeader>
               <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl">🧠</span>
+                <Brain className="w-6 h-6 text-purple-400" />
               </div>
               <CardTitle className="text-white">AI Query Generation</CardTitle>
               <CardDescription className="text-gray-300">
                 FAISS-powered RAG system with Groq LLM and Cohere reranking for
-                intelligent SQL optimization
+                intelligent SQL query generation across multiple dialects
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li>• Llama 3.3-70B model integration</li>
-                <li>• Vector-based query similarity</li>
-                <li>• Trino-specialized knowledge base</li>
+                <li>• Context-aware query suggestions</li>
+                <li>• Multi-dialect SQL generation</li>
               </ul>
             </CardContent>
           </Card>
@@ -130,21 +128,21 @@ export default function Home() {
           <Card className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 border-blue-500/30 hover:border-blue-400/50 transition-all duration-300">
             <CardHeader>
               <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl">⚡</span>
+                <Zap className="w-6 h-6 text-blue-400" />
               </div>
               <CardTitle className="text-white">
                 Multi-Engine Execution
               </CardTitle>
               <CardDescription className="text-gray-300">
                 Execute queries across MySQL, Trino, Spark, and PostgreSQL with
-                unified API interface
+                unified interface and intelligent routing
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li>• Docker-orchestrated infrastructure</li>
-                <li>• Distributed Spark processing</li>
-                <li>• Redis caching layer</li>
+                <li>• Seamless engine switching</li>
+                <li>• Distributed query processing</li>
+                <li>• Performance-optimized caching</li>
               </ul>
             </CardContent>
           </Card>
@@ -153,7 +151,7 @@ export default function Home() {
           <Card className="bg-gradient-to-br from-emerald-900/50 to-teal-900/50 border-emerald-500/30 hover:border-emerald-400/50 transition-all duration-300">
             <CardHeader>
               <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl">🗄️</span>
+                <Database className="w-6 h-6 text-emerald-400" />
               </div>
               <CardTitle className="text-white">Schema Intelligence</CardTitle>
               <CardDescription className="text-gray-300">
@@ -174,7 +172,7 @@ export default function Home() {
           <Card className="bg-gradient-to-br from-orange-900/50 to-red-900/50 border-orange-500/30 hover:border-orange-400/50 transition-all duration-300">
             <CardHeader>
               <div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl">📊</span>
+                <BarChart3 className="w-6 h-6 text-orange-400" />
               </div>
               <CardTitle className="text-white">Advanced Analytics</CardTitle>
               <CardDescription className="text-gray-300">
@@ -195,7 +193,7 @@ export default function Home() {
           <Card className="bg-gradient-to-br from-pink-900/50 to-rose-900/50 border-pink-500/30 hover:border-pink-400/50 transition-all duration-300">
             <CardHeader>
               <div className="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl">🚀</span>
+                <Rocket className="w-6 h-6 text-pink-400" />
               </div>
               <CardTitle className="text-white">Microservices Ready</CardTitle>
               <CardDescription className="text-gray-300">
@@ -216,7 +214,7 @@ export default function Home() {
           <Card className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border-indigo-500/30 hover:border-indigo-400/50 transition-all duration-300">
             <CardHeader>
               <div className="w-12 h-12 bg-indigo-500/20 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl">🔒</span>
+                <Lock className="w-6 h-6 text-indigo-400" />
               </div>
               <CardTitle className="text-white">Enterprise Security</CardTitle>
               <CardDescription className="text-gray-300">
@@ -247,17 +245,18 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
+              asChild
               size="lg"
               className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-lg px-8 py-4"
             >
-              Start Free Trial
+              <Link href="/auth/register">Get Started</Link>
             </Button>
             <Button
+              asChild
               size="lg"
-              variant="outline"
-              className="border-purple-500/50 text-purple-300 hover:bg-purple-500/10 text-lg px-8 py-4"
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-lg px-8 py-4"
             >
-              Schedule Demo
+              <Link href="/auth/login">Sign In</Link>
             </Button>
           </div>
         </div>
@@ -274,7 +273,7 @@ export default function Home() {
               <span className="text-white font-semibold">Sequelizer Pro</span>
             </div>
             <div className="text-gray-400 text-sm">
-              © 2024 Sequelizer Pro. Powered by advanced AI and distributed
+              © 2025 Sequelizer Pro. Powered by advanced AI and distributed
               computing.
             </div>
           </div>

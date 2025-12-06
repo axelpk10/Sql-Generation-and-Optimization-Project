@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   Loader2,
   RefreshCw,
+  Brain,
 } from "lucide-react";
 import { MonacoEditor } from "./components/MonacoEditor";
 import { SchemaPanel } from "./components/SchemaPanel";
@@ -52,16 +53,21 @@ export default function SQLEditor() {
     }
   }, []);
 
-  // Redirect if no current project
+  // Redirect if no current project (with delay to allow context to load)
   useEffect(() => {
-    if (!currentProject) {
-      router.push("/projects");
-      return;
-    }
+    const timer = setTimeout(() => {
+      if (!currentProject) {
+        router.push("/projects");
+      }
+    }, 300); // Wait 300ms for context to load
 
-    // Discover schema if not already done
+    return () => clearTimeout(timer);
+  }, [currentProject, router]);
+
+  // Discover schema if not already done
+  useEffect(() => {
     const initializeEditor = async () => {
-      if (!currentProject.schema?.isDiscovered) {
+      if (currentProject && !currentProject.schema?.isDiscovered) {
         setIsLoadingSchema(true);
         try {
           await discoverSchema(currentProject.id);
@@ -74,7 +80,7 @@ export default function SQLEditor() {
     };
 
     initializeEditor();
-  }, [currentProject, discoverSchema, router]);
+  }, [currentProject, discoverSchema]);
 
   const executeQuery = async () => {
     if (!query.trim() || !currentProject) return;
@@ -240,6 +246,15 @@ export default function SQLEditor() {
             </div>
 
             <div className="flex items-center space-x-2">
+              <Button
+                onClick={() => router.push("/ai-assistant")}
+                size="sm"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0"
+              >
+                <Brain className="h-4 w-4 mr-2" />
+                AI Assistant
+              </Button>
+
               <FederatedQueryTemplates
                 projectDialect={currentProject.dialect}
                 onTemplateSelect={(templateQuery) => {
@@ -250,9 +265,8 @@ export default function SQLEditor() {
               <Button
                 onClick={handleSchemaRefresh}
                 disabled={isLoadingSchema}
-                variant="outline"
                 size="sm"
-                className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0"
               >
                 {isLoadingSchema ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />

@@ -122,6 +122,11 @@ def generate_schema():
         requirements = data.get('requirements', '').strip()
         dialect = data.get('dialect', 'postgresql').lower()
         
+        # Map "analytics" dialect to "trino" (frontend abstraction)
+        if dialect == 'analytics':
+            dialect = 'trino'
+            logger.info("📊 Analytics dialect detected, mapping to Trino")
+        
         # NEW: Accept project context from frontend
         project_id = data.get('project_id')
         project_name = data.get('project_name')
@@ -157,7 +162,7 @@ def generate_schema():
         conversation_context = get_conversation_context(project_id)
         
         # Generate schema with dialect support, conversation context, AND existing schema
-        result = schema_generator.generate_schema(requirements, dialect, conversation_context, existing_schema)
+        result = schema_generator.generate_schema(requirements, dialect, conversation_context, existing_schema, project_id)
         
         # Add API metadata
         result['api_response_time'] = time.time() - start_time
@@ -187,10 +192,22 @@ def get_analytics():
     """Get comprehensive schema generation analytics"""
     try:
         hours = request.args.get('hours', 24, type=int)
-        stats = schema_analytics.get_performance_stats(hours)
+        project_id = request.args.get('project_id')  # Optional project filter
+        stats = schema_analytics.get_performance_stats(hours, project_id)
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Error getting analytics: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/analytics/rag', methods=['GET'])
+def get_rag_analytics():
+    """Get RAG pipeline performance analytics"""
+    try:
+        hours = request.args.get('hours', 24, type=int)
+        stats = schema_analytics.get_rag_performance_stats(hours)
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting RAG analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

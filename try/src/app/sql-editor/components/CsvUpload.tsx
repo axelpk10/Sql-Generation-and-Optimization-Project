@@ -180,7 +180,7 @@ ${result.query_tip}${
           <Button
             onClick={uploadFiles}
             disabled={isUploading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
             size="sm"
           >
             {isUploading ? (

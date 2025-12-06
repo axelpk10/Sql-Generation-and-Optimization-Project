@@ -363,6 +363,7 @@ export function SqlQueryChat({ project }: SqlQueryChatProps) {
                                 "pendingQuery",
                                 message.sqlQuery!
                               );
+                              // Use Next.js router for client-side navigation (preserves context)
                               window.location.href = "/sql-editor";
                             }}
                             className="h-8 px-3 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20"

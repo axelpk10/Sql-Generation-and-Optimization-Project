@@ -21,6 +21,7 @@ import uuid
 from pathlib import Path
 from context_manager import ContextManager
 import sqlparse
+from query_analytics import query_analytics
 
 # Load environment variables
 load_dotenv()
@@ -140,6 +141,8 @@ def extract_tables_from_query(query):
             r'UPDATE\s+([a-zA-Z0-9_]+)',         # UPDATE table
             r'TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([a-zA-Z0-9_]+)',  # CREATE/DROP TABLE
             r'REFERENCES\s+([a-zA-Z0-9_]+)',     # FOREIGN KEY REFERENCES
+            r'INDEX\s+(?:\w+\s+)?ON\s+([a-zA-Z0-9_]+)',  # CREATE INDEX ... ON table
+            r'PARTITION\s+OF\s+([a-zA-Z0-9_]+)',  # CREATE TABLE ... PARTITION OF parent_table
         ]
         
         tables = set()
@@ -180,8 +183,15 @@ def rewrite_query_with_prefix(query, project_id):
     """
     Rewrite SQL query to use prefixed table names.
     Handles SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, etc.
+    Skip prefixing for analytics/Trino projects (federation queries).
     """
     if not query or not project_id:
+        return query
+    
+    # Skip prefixing for analytics/Trino projects (they use fully-qualified names)
+    project = context_mgr.get_project_metadata(project_id)
+    if project and project.get('dialect') == 'analytics':
+        logger.info(f"[REFRESH] Skipping table prefix for analytics project: {project_id}")
         return query
     
     try:
@@ -533,6 +543,14 @@ def execute_mysql():
                     was_successful=True,
                     user_question=user_question
                 )
+                
+                # Log query pattern analytics
+                query_analytics.log_query_pattern(
+                    project_id=project_id,
+                    query=query,
+                    execution_time_ms=execution_time_ms,
+                    was_successful=True
+                )
             
             return jsonify({
                 'success': True,
@@ -683,6 +701,14 @@ def execute_postgresql():
                     was_successful=True,
                     user_question=user_question
                 )
+                
+                # Log query pattern analytics
+                query_analytics.log_query_pattern(
+                    project_id=project_id,
+                    query=query,
+                    execution_time_ms=execution_time_ms,
+                    was_successful=True
+                )
             
             return jsonify({
                 'success': True,
@@ -807,6 +833,14 @@ def execute_trino():
                     execution_time_ms=execution_time_ms,
                     was_successful=True,
                     user_question=user_question
+                )
+                
+                # Log query pattern analytics
+                query_analytics.log_query_pattern(
+                    project_id=project_id,
+                    query=query,
+                    execution_time_ms=execution_time_ms,
+                    was_successful=True
                 )
             
             return jsonify({
@@ -1007,6 +1041,14 @@ def execute_spark():
                     execution_time_ms=execution_time_ms,
                     was_successful=True,
                     user_question=user_question
+                )
+                
+                # Log query pattern analytics
+                query_analytics.log_query_pattern(
+                    project_id=project_id,
+                    query=query,
+                    execution_time_ms=execution_time_ms,
+                    was_successful=True
                 )
             
             return jsonify(result_data)
@@ -2031,6 +2073,25 @@ def get_project_stats(project_id):
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Error retrieving project stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/analytics/query-patterns', methods=['GET'])
+def get_query_pattern_analytics():
+    """Get query pattern analytics"""
+    try:
+        project_id = request.args.get('project_id')
+        hours = request.args.get('hours', 24, type=int)
+        
+        stats = {
+            'query_types': query_analytics.get_query_type_distribution(project_id, hours),
+            'most_accessed_tables': query_analytics.get_most_accessed_tables(project_id),
+            'complexity_distribution': query_analytics.get_complexity_distribution(project_id, hours),
+            'performance': query_analytics.get_performance_stats(project_id, hours)
+        }
+        
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting query pattern analytics: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

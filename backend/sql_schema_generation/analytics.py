@@ -107,11 +107,31 @@ class SchemaAnalytics:
                 )
             """)
             
+            # RAG Pipeline Analytics Table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS rag_analytics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    schema_id TEXT,
+                    retrieval_time REAL,
+                    docs_retrieved INTEGER,
+                    avg_retrieval_score REAL,
+                    rerank_time REAL,
+                    rerank_model TEXT,
+                    docs_after_rerank INTEGER,
+                    avg_rerank_score REAL,
+                    score_improvement REAL,
+                    top_doc_sources TEXT,
+                    timestamp DATETIME,
+                    FOREIGN KEY (schema_id) REFERENCES schema_metrics (schema_id)
+                )
+            """)
+            
             # Performance indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON schema_metrics(timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_category ON schema_metrics(schema_category)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_complexity ON schema_metrics(schema_complexity)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_response_time ON schema_metrics(response_time)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_timestamp ON rag_analytics(timestamp)")
     
     def analyze_schema_content(self, schema_content: str) -> Dict:
         """Analyze schema content for complexity metrics"""
@@ -307,13 +327,21 @@ class SchemaAnalytics:
         
         return schema_id
     
-    def get_performance_stats(self, hours: int = 24) -> Dict:
+    def get_performance_stats(self, hours: int = 24, project_id: Optional[str] = None) -> Dict:
         """Get comprehensive performance statistics"""
         since = datetime.now() - timedelta(hours=hours)
         
         with sqlite3.connect(self.db_path) as conn:
+            # Build query with optional project filter
+            base_where = "WHERE timestamp >= ?"
+            params = [since]
+            
+            if project_id:
+                base_where += " AND user_id = ?"
+                params.append(project_id)
+            
             # Overall performance stats
-            overall = conn.execute("""
+            overall = conn.execute(f"""
                 SELECT 
                     COUNT(*) as total_schemas,
                     AVG(response_time) as avg_response_time,
@@ -324,11 +352,11 @@ class SchemaAnalytics:
                     SUM(CASE WHEN success THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate,
                     SUM(CASE WHEN has_foreign_keys THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as fk_usage_rate
                 FROM schema_metrics 
-                WHERE timestamp >= ?
-            """, (since,)).fetchone()
+                {base_where}
+            """, tuple(params)).fetchone()
             
             # Quality statistics
-            quality_stats = conn.execute("""
+            quality_stats = conn.execute(f"""
                 SELECT 
                     AVG(sq.overall_score) as avg_quality_score,
                     AVG(sq.normalization_score) as avg_normalization,
@@ -336,24 +364,24 @@ class SchemaAnalytics:
                     AVG(sq.indexing_quality) as avg_indexing_quality
                 FROM schema_quality sq
                 JOIN schema_metrics sm ON sq.schema_id = sm.schema_id
-                WHERE sm.timestamp >= ?
-            """, (since,)).fetchone()
+                {base_where.replace('timestamp', 'sm.timestamp')}
+            """, tuple(params)).fetchone()
             
             # By category
-            by_category = conn.execute("""
+            by_category = conn.execute(f"""
                 SELECT 
                     schema_category,
                     COUNT(*) as count,
                     AVG(response_time) as avg_response_time,
                     AVG(schema_complexity) as avg_complexity
                 FROM schema_metrics 
-                WHERE timestamp >= ? AND success = 1
+                {base_where} AND success = 1
                 GROUP BY schema_category
                 ORDER BY count DESC
-            """, (since,)).fetchall()
+            """, tuple(params)).fetchall()
             
             # Complexity distribution
-            complexity_dist = conn.execute("""
+            complexity_dist = conn.execute(f"""
                 SELECT 
                     CASE 
                         WHEN schema_complexity = 1 THEN 'Simple (1 table)'
@@ -364,9 +392,9 @@ class SchemaAnalytics:
                     COUNT(*) as count,
                     AVG(response_time) as avg_response_time
                 FROM schema_metrics 
-                WHERE timestamp >= ? AND success = 1
+                {base_where} AND success = 1
                 GROUP BY complexity_level
-            """, (since,)).fetchall()
+            """, tuple(params)).fetchall()
         
         return {
             'period_hours': hours,
@@ -439,6 +467,67 @@ class SchemaAnalytics:
         
         return {
             'daily_trends': [dict(zip(['date', 'schemas_generated', 'avg_response_time', 'avg_quality'], row)) for row in daily_usage]
+        }
+    
+    def log_rag_metrics(self, schema_id: str, retrieval_metrics: Dict, rerank_metrics: Dict):
+        """Log RAG pipeline performance metrics"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO rag_analytics 
+                (schema_id, retrieval_time, docs_retrieved, avg_retrieval_score,
+                 rerank_time, rerank_model, docs_after_rerank, avg_rerank_score,
+                 score_improvement, top_doc_sources, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                schema_id,
+                retrieval_metrics.get('retrieval_time', 0),
+                retrieval_metrics.get('docs_retrieved', 0),
+                retrieval_metrics.get('avg_score', 0),
+                rerank_metrics.get('rerank_time', 0),
+                rerank_metrics.get('model', 'cohere'),
+                rerank_metrics.get('docs_after', 0),
+                rerank_metrics.get('avg_score', 0),
+                rerank_metrics.get('score_improvement', 0),
+                ','.join(rerank_metrics.get('top_sources', [])),
+                datetime.now()
+            ))
+    
+    def get_rag_performance_stats(self, hours: int = 24) -> Dict:
+        """Get RAG pipeline performance statistics"""
+        since = datetime.now() - timedelta(hours=hours)
+        
+        with sqlite3.connect(self.db_path) as conn:
+            stats = conn.execute("""
+                SELECT 
+                    COUNT(*) as total_queries,
+                    AVG(retrieval_time) as avg_retrieval_time,
+                    AVG(docs_retrieved) as avg_docs_retrieved,
+                    AVG(avg_retrieval_score) as avg_retrieval_score,
+                    AVG(rerank_time) as avg_rerank_time,
+                    AVG(docs_after_rerank) as avg_docs_after_rerank,
+                    AVG(avg_rerank_score) as avg_rerank_score,
+                    AVG(score_improvement) as avg_score_improvement
+                FROM rag_analytics
+                WHERE timestamp >= ?
+            """, (since,)).fetchone()
+            
+            # Top document sources
+            top_sources = conn.execute("""
+                SELECT top_doc_sources, COUNT(*) as usage_count
+                FROM rag_analytics
+                WHERE timestamp >= ?
+                GROUP BY top_doc_sources
+                ORDER BY usage_count DESC
+                LIMIT 10
+            """, (since,)).fetchall()
+        
+        return {
+            'overall': dict(zip([
+                'total_queries', 'avg_retrieval_time', 'avg_docs_retrieved',
+                'avg_retrieval_score', 'avg_rerank_time', 'avg_docs_after_rerank',
+                'avg_rerank_score', 'avg_score_improvement'
+            ], stats)) if stats else {},
+            'top_sources': [{'source': row[0], 'count': row[1]} for row in top_sources]
         }
 
 # Global analytics instance

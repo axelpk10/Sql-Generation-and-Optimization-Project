@@ -150,27 +150,21 @@ function DashboardContent() {
     },
     {
       icon: <Database className="h-8 w-8" />,
+      title: "Schema Analytics",
+      description: "Quality scores, complexity metrics, and schema insights",
+      status: "Active",
+      color: "from-purple-500 to-blue-500",
+      onClick: () => router.push("/schema-analytics"),
+      buttonText: "View Insights",
+    },
+    {
+      icon: <Database className="h-8 w-8" />,
       title: "Schema Visualizer",
       description: "Interactive ER diagram with automatic relationship detection",
       status: "Active",
       color: "from-cyan-500 to-blue-500",
       onClick: () => router.push("/schema-visualizer"),
       buttonText: "View Schema",
-    },
-    {
-      icon: <FileText className="h-8 w-8" />,
-      title: "Documentation",
-      description: "Auto-generate documentation for your database schemas",
-      status: "Coming Soon",
-      color: "from-indigo-500 to-blue-500",
-    },
-    {
-      icon: <TrendingUp className="h-8 w-8" />,
-      title: "Performance Monitor",
-      description:
-        "Real-time monitoring of query execution and database performance",
-      status: "Coming Soon",
-      color: "from-red-500 to-pink-500",
     },
   ];
 

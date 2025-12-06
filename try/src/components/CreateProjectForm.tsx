@@ -81,12 +81,7 @@ export default function CreateProjectForm({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    dialect: "mysql" as
-      | "mysql"
-      | "postgresql"
-      | "analytics"
-      | "trino"
-      | "spark",
+    dialect: "mysql" as "mysql" | "postgresql" | "analytics" | "trino" | "spark",
   });
   const [isCreating, setIsCreating] = useState(false);
   const [creationStep, setCreationStep] = useState(0);

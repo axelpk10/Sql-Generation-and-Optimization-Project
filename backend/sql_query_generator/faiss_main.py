@@ -565,6 +565,11 @@ def generate_sql_query_endpoint():
         user_query = data.get("user_query", "")
         dialect = data.get("dialect", "trino").lower()
         
+        # Map analytics dialect to trino for federation queries
+        if dialect == "analytics":
+            dialect = "trino"
+            print(f"🔄 Mapped 'analytics' dialect to 'trino' for federation query support")
+        
         # NEW: Accept project context from frontend
         project_id = data.get("project_id")
         project_name = data.get("project_name")

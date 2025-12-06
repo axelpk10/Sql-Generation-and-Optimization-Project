@@ -9,7 +9,7 @@ from groq import Groq
 import cohere
 from pathlib import Path
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 import time
 import logging
@@ -66,8 +66,26 @@ class SchemaGenerator:
             return []
         
         try:
-            docs = self.vector_store.similarity_search(query, k=k)
-            logger.info(f"Retrieved {len(docs)} documents for query: {query}")
+            # Track retrieval performance
+            retrieval_start = time.time()
+            docs_with_scores = self.vector_store.similarity_search_with_score(query, k=k)
+            retrieval_time = time.time() - retrieval_start
+            
+            # Extract documents and scores
+            docs = [doc for doc, score in docs_with_scores]
+            scores = [float(score) for doc, score in docs_with_scores]
+            
+            # Log RAG metrics
+            logger.info(f"📊 RAG Retrieval Metrics:")
+            logger.info(f"  - Retrieved {len(docs)} documents in {retrieval_time:.3f}s")
+            logger.info(f"  - Similarity scores: {[f'{s:.3f}' for s in scores]}")
+            logger.info(f"  - Avg relevance: {sum(scores)/len(scores) if scores else 0:.3f}")
+            
+            # Store metrics for analytics (attach to docs)
+            for doc, score in zip(docs, scores):
+                doc.metadata['retrieval_score'] = score
+                doc.metadata['retrieval_time'] = retrieval_time
+            
             return docs
         except Exception as e:
             logger.error(f"Error retrieving documents: {str(e)}")
@@ -79,6 +97,9 @@ class SchemaGenerator:
             return []
         
         try:
+            # Store original retrieval scores
+            original_scores = [doc.metadata.get('retrieval_score', 0) for doc in documents]
+            
             # Try different reranking models with fallback
             rerank_models = [
                 "rerank-english-v3.0",
@@ -88,12 +109,25 @@ class SchemaGenerator:
             
             for model in rerank_models:
                 try:
+                    rerank_start = time.time()
                     reranked = self.cohere_client.rerank(
                         model=model,
                         query=query,
                         documents=[doc.page_content for doc in documents],
                         top_n=top_n
                     )
+                    rerank_time = time.time() - rerank_start
+                    
+                    # Extract rerank scores
+                    rerank_scores = [result.relevance_score for result in reranked.results]
+                    
+                    # Log reranking impact
+                    logger.info(f"📊 RAG Reranking Metrics:")
+                    logger.info(f"  - Model: {model}")
+                    logger.info(f"  - Rerank time: {rerank_time:.3f}s")
+                    logger.info(f"  - Before (retrieval): {[f'{s:.3f}' for s in original_scores[:top_n]]}")
+                    logger.info(f"  - After (rerank): {[f'{s:.3f}' for s in rerank_scores]}")
+                    logger.info(f"  - Avg improvement: {(sum(rerank_scores)/len(rerank_scores) - sum(original_scores[:top_n])/len(original_scores[:top_n])):.3f}")
                     
                     # Return reranked documents
                     reranked_docs = []
@@ -115,7 +149,7 @@ class SchemaGenerator:
             logger.error(f"Error in reranking: {str(e)}")
             return documents[:top_n]
     
-    def generate_schema(self, requirements: str, dialect: str = "postgresql", conversation_context=None, existing_schema=None) -> Dict[str, Any]:
+    def generate_schema(self, requirements: str, dialect: str = "postgresql", conversation_context=None, existing_schema=None, project_id: Optional[str] = None) -> Dict[str, Any]:
         """Generate database schema based on requirements for specific dialect"""
         start_time = time.time()
         
@@ -131,6 +165,11 @@ class SchemaGenerator:
         logger.info(f"{'='*80}\n")
         
         try:
+            # Map "analytics" dialect to "trino" (frontend abstraction)
+            if dialect.lower() == 'analytics':
+                dialect = 'trino'
+                logger.info("📊 Analytics dialect detected, mapping to Trino")
+            
             # Validate dialect
             supported_dialects = ['mysql', 'postgresql', 'trino', 'spark']
             if dialect.lower() not in supported_dialects:
@@ -212,6 +251,7 @@ class SchemaGenerator:
                     docs_retrieved=len(docs),
                     docs_used=len(reranked_docs),
                     success=True,
+                    user_id=project_id,  # Track which project this belongs to
                     reranking_model="rerank-english-v3.0",
                     llm_model="llama-3.3-70b-versatile",
                     dialect=dialect  # Add dialect to analytics
@@ -301,10 +341,17 @@ POSTGRESQL SPECIFIC REQUIREMENTS:
 - Leverage JSONB for flexible JSON storage with indexing
 - Use appropriate PostgreSQL data types (BIGSERIAL, TIMESTAMPTZ, ARRAY)
 - Include proper constraints (CHECK, UNIQUE, FOREIGN KEY)
-- Consider table partitioning for large datasets
+- Use GENERATED ALWAYS AS for computed columns where applicable
 - Use CREATE INDEX CONCURRENTLY for production environments
 - Implement proper schema organization with namespaces
-- Use GENERATED ALWAYS AS for computed columns where applicable""",
+
+POSTGRESQL PARTITIONING RULES (CRITICAL):
+- Partition key expressions MUST use IMMUTABLE functions only
+- WRONG: PARTITION BY RANGE (EXTRACT(YEAR FROM created_at)) - will fail!
+- CORRECT: PARTITION BY RANGE (created_at) - partition directly on timestamp column
+- CORRECT: Add generated column first: year INTEGER GENERATED ALWAYS AS (EXTRACT(YEAR FROM created_at)::INTEGER) STORED, then PARTITION BY RANGE (year)
+- When partitioning by date/time, use the timestamp column directly, not functions
+- Create child partitions separately after the main table with FOR VALUES FROM/TO""",
             
             'trino': """
 TRINO SPECIFIC REQUIREMENTS:

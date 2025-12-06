@@ -36,37 +36,102 @@ export default function ProjectsPage() {
   } = useProject();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [enrichedProjects, setEnrichedProjects] = useState<any[]>([]);
 
-  // Just check if context is loaded, don't auto-redirect
+  // Load project metadata (schema and query counts) on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const loadProjectsMetadata = async () => {
+      if (projects.length === 0) {
+        setEnrichedProjects([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // Load schema and query counts for each project
+        const updatedProjects = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              // Load schema
+              const schemaResponse = await fetch(
+                `http://localhost:8000/api/projects/${project.id}/schema`
+              );
+              const schemaData = schemaResponse.ok
+                ? await schemaResponse.json()
+                : null;
+
+              // Load query intents
+              const intentsResponse = await fetch(
+                `http://localhost:8000/api/context/intents/${project.id}?limit=100`
+              );
+              const intentsData = intentsResponse.ok
+                ? await intentsResponse.json()
+                : { intents: [] };
+
+              return {
+                ...project,
+                schema: schemaData?.schema,
+                queryIntents: intentsData.intents || [],
+              };
+            } catch (error) {
+              console.error(
+                `Failed to load metadata for project ${project.id}:`,
+                error
+              );
+              return project;
+            }
+          })
+        );
+
+        setEnrichedProjects(updatedProjects);
+      } catch (error) {
+        console.error("Failed to load projects metadata:", error);
+        setEnrichedProjects(projects);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProjectsMetadata();
+  }, [projects]);
+
+  const handleSelectProject = async (project: Project) => {
+    try {
+      setIsLoading(true);
+      await setCurrentProject(project);
+      // Navigate to dashboard after setting project
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Failed to select project:", error);
+      alert("Failed to load project. Please try again.");
+    } finally {
       setIsLoading(false);
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleSelectProject = (project: Project) => {
-    setCurrentProject(project);
-    // Navigate to dashboard after setting project
-    router.push("/dashboard");
+    }
   };
 
   const handleCreateProject = () => {
     setShowCreateForm(true);
   };
 
-  const handleDeleteProject = (project: Project, e: React.MouseEvent) => {
+  const handleDeleteProject = async (project: Project, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click
     if (
       confirm(
         `Are you sure you want to delete "${project.name}"? This action cannot be undone.`
       )
     ) {
-      deleteProject(project.id);
-      // If deleted project was current, clear current project
-      if (currentProject?.id === project.id) {
-        setCurrentProject(null);
+      try {
+        setIsLoading(true);
+        await deleteProject(project.id);
+        // If deleted project was current, clear current project
+        if (currentProject?.id === project.id) {
+          await setCurrentProject(null);
+        }
+      } catch (error) {
+        console.error("Failed to delete project:", error);
+        alert("Failed to delete project. Please try again.");
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -101,25 +166,21 @@ export default function ProjectsPage() {
       postgresql: {
         name: "PostgreSQL",
         description: "Analytics & Reporting",
-        icon: "📊",
       },
-      mysql: { name: "MySQL", description: "Build Applications", icon: "🔧" },
+      mysql: { name: "MySQL", description: "Build Applications" },
       trino: {
         name: "Trino",
         description: "Cross-Database Analytics",
-        icon: "🌐",
       },
       spark: {
         name: "Apache Spark",
         description: "Process Large Datasets",
-        icon: "⚡",
       },
     };
     return (
       info[dialect as keyof typeof info] || {
         name: dialect,
         description: "Database",
-        icon: "💾",
       }
     );
   };
@@ -158,7 +219,7 @@ export default function ProjectsPage() {
                   <Database className="h-7 w-7 text-white" />
                 </div>
                 <h1 className="text-4xl font-bold text-white">
-                  SQLMaster Projects
+                  Sequelizer Pro Projects
                 </h1>
               </div>
               <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-6">
@@ -177,9 +238,22 @@ export default function ProjectsPage() {
                   </Button>
                 )}
                 <Button
-                  onClick={() => clearAllContext()}
+                  onClick={async () => {
+                    if (confirm("Are you sure you want to delete ALL projects? This action cannot be undone.")) {
+                      try {
+                        setIsLoading(true);
+                        await clearAllContext();
+                      } catch (error) {
+                        console.error("Failed to clear all projects:", error);
+                        alert("Failed to clear all projects. Please try again.");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }
+                  }}
                   variant="outline"
                   className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                  disabled={isLoading || projects.length === 0}
                 >
                   Clear All Projects
                 </Button>
@@ -213,7 +287,7 @@ export default function ProjectsPage() {
                   onClick={handleCreateProject}
                 >
                   <CardContent className="p-8 text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                       <Plus className="h-8 w-8 text-white" />
                     </div>
                     <CardTitle className="text-white text-xl mb-2">
@@ -231,7 +305,7 @@ export default function ProjectsPage() {
                 </Card>
 
                 {/* Existing Projects */}
-                {projects?.map((project) => (
+                {enrichedProjects?.map((project) => (
                   <Card
                     key={project.id}
                     className="group bg-gray-900/50 border-gray-800 backdrop-blur-sm hover:bg-gray-900/70 transition-all duration-300 hover:scale-105 hover:border-gray-700 cursor-pointer relative"
@@ -249,11 +323,6 @@ export default function ProjectsPage() {
                             {project.name}
                           </CardTitle>
                           <div className="flex items-center gap-2 mt-1 mb-2">
-                            <Badge
-                              className={getDialectBadgeColor(project.dialect)}
-                            >
-                              {getDialectInfo(project.dialect).name}
-                            </Badge>
                             <span className="text-xs text-gray-400">
                               {getDialectInfo(project.dialect).description}
                             </span>
@@ -293,13 +362,13 @@ export default function ProjectsPage() {
                           <div className="flex items-center gap-2">
                             <Table className="h-4 w-4 text-gray-400" />
                             <span className="text-gray-300">
-                              {project.createdTables?.length || 0} Tables
+                              {project.schema?.tables?.length || 0} Tables
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <History className="h-4 w-4 text-gray-400" />
                             <span className="text-gray-300">
-                              {project.queryHistory?.length || 0} Queries
+                              {project.queryIntents?.length || 0} Queries
                             </span>
                           </div>
                         </div>
@@ -328,7 +397,7 @@ export default function ProjectsPage() {
               </div>
 
               {/* Empty State */}
-              {projects.length === 0 && (
+              {enrichedProjects.length === 0 && !isLoading && (
                 <div className="text-center py-16">
                   <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Database className="h-12 w-12 text-gray-500" />
@@ -343,7 +412,7 @@ export default function ProjectsPage() {
                   </p>
                   <Button
                     onClick={handleCreateProject}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                     size="lg"
                   >
                     <Plus className="h-5 w-5 mr-2" />
